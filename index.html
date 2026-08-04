@@ -445,6 +445,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb_rhPbFxSt46uU9JXeEc-GMfVdTzCK6U",
@@ -456,63 +457,63 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const fbAuth = getAuth(fbApp);
+const firestoreDb = getFirestore(fbApp);
 
 (function(){
   "use strict";
 
-  /* ---------- IndexedDB layer ---------- */
-  const DB_NAME = 'trilha_db';
-  const DB_VERSION = 1;
-  let db;
+  /* ---------- Firestore layer (dados na nuvem) ---------- */
+  let uid = null;
+  function colRef(name){ return collection(firestoreDb, 'users', uid, name); }
+  function docRef(name, id){ return doc(firestoreDb, 'users', uid, name, id); }
 
-  function openDB(){
+  const Clients = {
+    add: async (data)=> (await addDoc(colRef('clients'), data)).id,
+    put: async (data)=>{ const {id, ...rest} = data; await updateDoc(docRef('clients', id), rest); },
+    all: async ()=>{ const snap = await getDocs(colRef('clients')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
+    del: (id)=> deleteDoc(docRef('clients', id)),
+  };
+  const Dogs = {
+    add: async (data)=> (await addDoc(colRef('dogs'), data)).id,
+    put: async (data)=>{ const {id, ...rest} = data; await updateDoc(docRef('dogs', id), rest); },
+    all: async ()=>{ const snap = await getDocs(colRef('dogs')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
+    byClient: async (clientId)=>{
+      const snap = await getDocs(query(colRef('dogs'), where('clientId','==',clientId)));
+      return snap.docs.map(d=>({id:d.id, ...d.data()}));
+    },
+    del: (id)=> deleteDoc(docRef('dogs', id)),
+  };
+  const Walks = {
+    add: async (data)=> (await addDoc(colRef('walks'), data)).id,
+    put: async (data)=>{ const {id, ...rest} = data; await updateDoc(docRef('walks', id), rest); },
+    all: async ()=>{ const snap = await getDocs(colRef('walks')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
+    del: (id)=> deleteDoc(docRef('walks', id)),
+  };
+
+  /* ---------- Fotos (ficam só no celular; Storage na nuvem ainda não está ativo) ---------- */
+  const PHOTO_DB_NAME = 'trilha_photos_db';
+  let photoDb;
+  function openPhotoDB(){
     return new Promise((resolve, reject)=>{
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      const req = indexedDB.open(PHOTO_DB_NAME, 1);
       req.onupgradeneeded = (e)=>{
         const d = e.target.result;
-        if(!d.objectStoreNames.contains('clients')){
-          d.createObjectStore('clients', {keyPath:'id', autoIncrement:true});
-        }
-        if(!d.objectStoreNames.contains('dogs')){
-          const s = d.createObjectStore('dogs', {keyPath:'id', autoIncrement:true});
-          s.createIndex('clientId','clientId');
-        }
-        if(!d.objectStoreNames.contains('walks')){
-          const s = d.createObjectStore('walks', {keyPath:'id', autoIncrement:true});
-          s.createIndex('date','date');
-          s.createIndex('clientId','clientId');
-        }
+        if(!d.objectStoreNames.contains('photos')) d.createObjectStore('photos', {keyPath:'walkId'});
       };
-      req.onsuccess = (e)=>{ db = e.target.result; resolve(db); };
+      req.onsuccess = (e)=>{ photoDb = e.target.result; resolve(photoDb); };
       req.onerror = (e)=> reject(e.target.error);
     });
   }
-  function store(name, mode){ return db.transaction(name, mode || 'readonly').objectStore(name); }
-  function p(req){
-    return new Promise((res, rej)=>{
-      req.onsuccess = ()=> res(req.result);
+  const Photos = {
+    save: (walkId, blob)=> new Promise((res,rej)=>{
+      const tx = photoDb.transaction('photos','readwrite').objectStore('photos').put({walkId, blob});
+      tx.onsuccess = ()=> res(); tx.onerror = ()=> rej(tx.error);
+    }),
+    get: (walkId)=> new Promise((res,rej)=>{
+      const req = photoDb.transaction('photos').objectStore('photos').get(walkId);
+      req.onsuccess = ()=> res(req.result ? req.result.blob : null);
       req.onerror = ()=> rej(req.error);
-    });
-  }
-
-  const Clients = {
-    add: (data)=> p(store('clients','readwrite').add(data)),
-    put: (data)=> p(store('clients','readwrite').put(data)),
-    all: ()=> p(store('clients').getAll()),
-    del: (id)=> p(store('clients','readwrite').delete(id)),
-  };
-  const Dogs = {
-    add: (data)=> p(store('dogs','readwrite').add(data)),
-    put: (data)=> p(store('dogs','readwrite').put(data)),
-    all: ()=> p(store('dogs').getAll()),
-    byClient: (clientId)=> p(store('dogs').index('clientId').getAll(clientId)),
-    del: (id)=> p(store('dogs','readwrite').delete(id)),
-  };
-  const Walks = {
-    add: (data)=> p(store('walks','readwrite').add(data)),
-    put: (data)=> p(store('walks','readwrite').put(data)),
-    all: ()=> p(store('walks').getAll()),
-    del: (id)=> p(store('walks','readwrite').delete(id)),
+    }),
   };
 
   async function deleteDogCascade(dogId){
@@ -718,7 +719,7 @@ const fbAuth = getAuth(fbApp);
         const dog = dogMap[w.dogId];
         const client = clientMap[w.clientId];
         const statusClass = w.status === 'concluido' ? 'status-concluido' : (w.status === 'cancelado' ? 'status-cancelado' : '');
-        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.photo ? ' 📷' : ''}</span>` : '<span class="status-pill">Agendado</span>';
+        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : '<span class="status-pill">Agendado</span>';
         html += `<li class="walk-card ${statusClass}" data-id="${w.id}">
           <div class="walk-top">
             <div>
@@ -735,7 +736,7 @@ const fbAuth = getAuth(fbApp);
     views.agenda.innerHTML = html;
 
     views.agenda.querySelectorAll('.walk-card').forEach(card=>{
-      card.addEventListener('click', ()=> openWalkDetail(Number(card.dataset.id)));
+      card.addEventListener('click', ()=> openWalkDetail(card.dataset.id));
     });
   }
 
@@ -788,7 +789,7 @@ const fbAuth = getAuth(fbApp);
       const semanasWrap = el.querySelector('#f-semanas-wrap');
 
       selCliente.addEventListener('change', async ()=>{
-        const cid = Number(selCliente.value);
+        const cid = selCliente.value;
         if(!cid){ selCao.innerHTML = '<option value="">Selecione o cliente primeiro</option>'; selCao.disabled = true; return; }
         const dogs = await Dogs.byClient(cid);
         if(dogs.length === 0){
@@ -805,8 +806,8 @@ const fbAuth = getAuth(fbApp);
       });
 
       el.querySelector('#save-passeio').addEventListener('click', async ()=>{
-        const clientId = Number(selCliente.value);
-        const dogId = Number(selCao.value);
+        const clientId = selCliente.value;
+        const dogId = selCao.value;
         const date = el.querySelector('#f-data').value;
         const time = el.querySelector('#f-hora').value;
         const errorEl = el.querySelector('#f-error');
@@ -842,7 +843,7 @@ const fbAuth = getAuth(fbApp);
 
       const reportHtml = w.status === 'concluido' ? `
         <div class="client-info">
-          ${w.photo ? `<img class="walk-photo" id="walk-photo-preview" alt="Foto do passeio">` : ''}
+          ${w.hasPhoto ? `<img class="walk-photo" id="walk-photo-preview" alt="Foto do passeio">` : ''}
           <div class="info-row">${w.report && w.report.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
           <div class="info-row">${w.report && w.report.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
           ${w.report && w.report.comportamento ? `<div class="info-row">🐾 ${esc(w.report.comportamento)}</div>` : ''}
@@ -864,9 +865,13 @@ const fbAuth = getAuth(fbApp);
           <button class="btn-ghost danger" id="del-walk">Excluir passeio</button>
         </div>
       `, (el)=>{
-        if(w.photo){
-          const img = el.querySelector('#walk-photo-preview');
-          if(img) img.src = URL.createObjectURL(w.photo);
+        if(w.hasPhoto){
+          Photos.get(w.id).then(blob=>{
+            if(blob){
+              const img = el.querySelector('#walk-photo-preview');
+              if(img) img.src = URL.createObjectURL(blob);
+            }
+          }).catch(()=>{});
         }
         const doneBtn = el.querySelector('#mark-done');
         if(doneBtn) doneBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
@@ -892,9 +897,10 @@ const fbAuth = getAuth(fbApp);
       <p class="hint">${esc(dg ? dg.nome : 'Cão')} · ${esc(c ? c.nome : 'Cliente')}</p>
 
       <label>Foto do passeio</label>
-      ${w.photo ? `<img class="walk-photo" id="current-photo-preview">` : ''}
+      ${w.hasPhoto ? `<img class="walk-photo" id="current-photo-preview">` : ''}
       <input type="file" accept="image/*" capture="environment" id="f-foto">
       <img id="new-photo-preview" class="walk-photo" hidden>
+      <div class="hint">A foto fica salva só neste celular por enquanto (o Storage na nuvem ainda não está ativo)</div>
 
       <label class="checkbox-row"><input type="checkbox" id="f-xixi" ${rep.xixi ? 'checked' : ''}> Fez xixi</label>
       <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" id="f-coco" ${rep.coco ? 'checked' : ''}> Fez cocô</label>
@@ -915,8 +921,13 @@ const fbAuth = getAuth(fbApp);
         <button class="btn-primary" id="save-finalizar">Salvar e finalizar</button>
       </div>
     `, (el)=>{
-      if(w.photo){
-        el.querySelector('#current-photo-preview').src = URL.createObjectURL(w.photo);
+      if(w.hasPhoto){
+        Photos.get(w.id).then(blob=>{
+          if(blob){
+            const img = el.querySelector('#current-photo-preview');
+            if(img) img.src = URL.createObjectURL(blob);
+          }
+        }).catch(()=>{});
       }
       const selComp = el.querySelector('#f-comportamento');
       if(rep.comportamento) selComp.value = rep.comportamento;
@@ -940,7 +951,10 @@ const fbAuth = getAuth(fbApp);
           comportamento: selComp.value,
           observacoes: el.querySelector('#f-obs').value.trim()
         };
-        if(file) w.photo = file;
+        if(file){
+          await Photos.save(w.id, file);
+          w.hasPhoto = true;
+        }
         await Walks.put(w);
         closeSheet();
         renderAgenda();
@@ -1001,7 +1015,7 @@ const fbAuth = getAuth(fbApp);
         views.clientes.querySelectorAll('.client-dogs').forEach(b=> b.setAttribute('hidden',''));
         if(isHidden){
           body.removeAttribute('hidden');
-          await renderClientDogs(Number(card.dataset.id), body);
+          await renderClientDogs(card.dataset.id, body);
         }
       });
     });
@@ -1047,7 +1061,7 @@ const fbAuth = getAuth(fbApp);
     });
     container.querySelectorAll('.del-dog').forEach(btn=>{
       btn.addEventListener('click', async (e)=>{
-        const dogId = Number(e.target.closest('.dog-chip').dataset.dogId);
+        const dogId = e.target.closest('.dog-chip').dataset.dogId;
         if(confirm('Excluir este cão e os passeios agendados dele?')){
           await deleteDogCascade(dogId);
           renderClientDogs(clientId, container);
@@ -1244,20 +1258,23 @@ const fbAuth = getAuth(fbApp);
 
   onAuthStateChanged(fbAuth, async (user)=>{
     if(user){
+      uid = user.uid;
       authGate.style.display = 'none';
       appRoot.style.display = '';
       if(!dbReady){
         try{
-          await openDB();
+          await openPhotoDB();
           dbReady = true;
           renderAgenda();
         }catch(err){
           document.getElementById('view-agenda').innerHTML =
-            '<div class="empty-state"><p>Não foi possível abrir o banco de dados local neste navegador.</p></div>';
+            '<div class="empty-state"><p>Não foi possível abrir o armazenamento local de fotos neste navegador.</p></div>';
           console.error(err);
         }
       }
     } else {
+      uid = null;
+      dbReady = false;
       authGate.style.display = 'flex';
       appRoot.style.display = 'none';
     }
