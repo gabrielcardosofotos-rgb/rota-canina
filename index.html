@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rota Canina — Painel do Passeador</title>
+<meta name="theme-color" content="#2F4B3C">
+<link rel="manifest" href='data:application/manifest+json,{"name":"Rota Canina — Painel do Passeador","short_name":"Rota Canina","start_url":".","display":"standalone","background_color":"%23EDEAE2","theme_color":"%232F4B3C","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%232F4B3C%27/%3E%3Ccircle cx=%2750%27 cy=%2758%27 r=%2718%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2730%27 cy=%2732%27 r=%278.5%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2770%27 cy=%2732%27 r=%278.5%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2718%27 cy=%2750%27 r=%277%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2782%27 cy=%2750%27 r=%277%27 fill=%27%23EDEAE2%27/%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDEAE2;
+    --surface:#FFFFFF;
+    --surface-alt:#F7F5EF;
+    --ink:#22281F;
+    --ink-soft:#5B6358;
+    --pine:#2F4B3C;
+    --pine-dark:#1E3226;
+    --ochre:#B8863B;
+    --ochre-soft:#EADFC7;
+    --line:#DAD5C8;
+    --line-strong:#C7C0AE;
+    --danger:#A24B3E;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces', Georgia, serif;
+    font-weight:600;
+    margin:0 0 4px 0;
+    letter-spacing:-0.01em;
+  }
+  #app{
+    max-width:520px;
+    margin:0 auto;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  .topbar{
+    padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 14px 20px;
+    background:var(--bg);
+    position:sticky;
+    top:0;
+    z-index:5;
+  }
+  .topbar .brand{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ochre);margin-bottom:2px;}
+  .topbar h1{font-size:26px;font-style:italic;color:var(--pine-dark);}
+  .topbar .sub{font-size:13px;color:var(--ink-soft);}
+  main.view{
+    flex:1;
+    overflow-y:auto;
+    padding:4px 20px 100px 20px;
+    display:none;
+  }
+  main.view.active{display:block;}
+
+  /* Empty states */
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--ink-soft);
+  }
+  .empty-state .glyph{font-size:34px;display:block;margin-bottom:10px;opacity:.7;}
+  .empty-state p{margin:0;font-size:14px;line-height:1.5;}
+
+  /* Agenda */
+  .day-group{margin-bottom:26px;}
+  .day-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .day-head .label{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:15px;
+    color:var(--pine-dark);
+    white-space:nowrap;
+  }
+  .day-head .rule{
+    flex:1;
+    height:0;
+    border-top:2px dashed var(--ochre);
+    opacity:.55;
+  }
+  .walks-list{
+    list-style:none;
+    margin:0;
+    padding-left:20px;
+    border-left:2px dashed var(--line-strong);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .walk-card{
+    position:relative;
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    box-shadow:0 1px 2px rgba(34,40,31,0.06);
+  }
+  .walk-card::before{
+    content:'';
+    position:absolute;
+    left:-26px;
+    top:20px;
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:var(--pine);
+    border:3px solid var(--bg);
+  }
+  .walk-card.status-concluido::before{background:var(--ochre);}
+  .walk-card.status-cancelado{opacity:.5;}
+  .walk-card.status-cancelado::before{background:var(--line-strong);}
+  .walk-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .walk-time{font-family:'Fraunces',serif;font-weight:600;font-size:18px;color:var(--pine-dark);}
+  .walk-dog{font-size:15px;font-weight:600;margin-top:2px;}
+  .walk-client{font-size:13px;color:var(--ink-soft);margin-top:1px;}
+  .status-pill{
+    font-size:11px;
+    padding:3px 9px;
+    border-radius:99px;
+    background:var(--surface-alt);
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .status-pill.concluido{background:var(--ochre-soft);color:#7A5A22;}
+
+  /* Clients */
+  .client-card{
+    background:var(--surface);
+    border-radius:var(--radius);
+    margin-bottom:10px;
+    overflow:hidden;
+    box-shadow:0 1px 2px rgba(34,40,31,0.06);
+  }
+  .client-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    cursor:pointer;
+  }
+  .client-name{font-family:'Fraunces',serif;font-weight:600;font-size:16px;}
+  .client-sub{font-size:13px;color:var(--ink-soft);margin-top:2px;}
+  .dog-badge{
+    font-size:12px;
+    background:var(--surface-alt);
+    color:var(--pine-dark);
+    padding:4px 10px;
+    border-radius:99px;
+    white-space:nowrap;
+  }
+  .client-dogs{
+    padding:0 16px 16px 16px;
+    border-top:1px solid var(--line);
+  }
+  .client-dogs[hidden]{display:none;}
+  .client-info{padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:4px;}
+  .info-row{font-size:14px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
+  .info-row:last-child{margin-bottom:0;}
+  .addr-link{color:var(--pine-dark);text-decoration:underline;text-decoration-color:var(--ochre);font-weight:500;}
+  .addr-list{
+    position:absolute;
+    top:100%;left:0;right:0;
+    margin:4px 0 0 0;
+    padding:0;
+    list-style:none;
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    border-radius:10px;
+    max-height:220px;
+    overflow-y:auto;
+    z-index:30;
+    box-shadow:0 6px 16px rgba(34,40,31,0.12);
+  }
+  .addr-list[hidden]{display:none;}
+  .addr-list li{
+    padding:10px 12px;
+    font-size:13px;
+    line-height:1.35;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .addr-list li:last-child{border-bottom:none;}
+  .addr-list li:active{background:var(--surface-alt);}
+  .dog-chip{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+    font-size:14px;
+  }
+  .dog-chip:last-of-type{border-bottom:none;}
+  .dog-chip .dog-meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
+  .dog-chip .dog-actions button{font-size:12px;}
+  .client-actions, .sheet-actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+  }
+
+  /* Buttons */
+  button{font-family:inherit;}
+  .btn-primary{
+    width:100%;
+    background:var(--pine);
+    color:#fff;
+    border:none;
+    border-radius:12px;
+    padding:14px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn-primary:active{background:var(--pine-dark);}
+  .btn-secondary{
+    flex:1;
+    background:var(--surface-alt);
+    color:var(--ink);
+    border:none;
+    border-radius:12px;
+    padding:14px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn-ghost{
+    background:none;
+    border:1px solid var(--line-strong);
+    color:var(--ink);
+    border-radius:99px;
+    padding:8px 14px;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .btn-ghost.danger{color:var(--danger);border-color:#E3C7C1;}
+
+  /* Bottom nav + FAB */
+  .bottomnav{
+    display:flex;
+    background:var(--surface);
+    border-top:1px solid var(--line);
+    padding:8px 12px calc(env(safe-area-inset-bottom,0px) + 8px) 12px;
+    position:relative;
+    z-index:5;
+  }
+  .bottomnav button{
+    flex:1;
+    background:none;
+    border:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    padding:6px;
+    font-size:11px;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .bottomnav button .ic{font-size:19px;}
+  .bottomnav button.active{color:var(--pine-dark);font-weight:600;}
+  .fab{
+    position:absolute;
+    right:20px;
+    bottom:78px;
+    width:56px;
+    height:56px;
+    border-radius:50%;
+    background:var(--ochre);
+    color:#fff;
+    border:none;
+    font-size:28px;
+    line-height:1;
+    box-shadow:0 4px 12px rgba(184,134,59,0.4);
+    cursor:pointer;
+    z-index:6;
+  }
+  .fab:active{transform:scale(0.96);}
+
+  /* Sheet */
+  .sheet-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,24,17,0.45);
+    display:flex;
+    align-items:flex-end;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease;
+    z-index:20;
+  }
+  .sheet-overlay.open{opacity:1;pointer-events:auto;}
+  .sheet{
+    background:var(--bg);
+    width:100%;
+    max-width:520px;
+    margin:0 auto;
+    border-radius:22px 22px 0 0;
+    padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 24px) 20px;
+    max-height:88vh;
+    overflow-y:auto;
+    transform:translateY(100%);
+    transition:transform .22s ease;
+  }
+  .sheet-overlay.open .sheet{transform:translateY(0);}
+  @media (prefers-reduced-motion: reduce){
+    .sheet-overlay, .sheet{transition:none;}
+  }
+  .sheet-handle{
+    width:36px;height:4px;background:var(--line-strong);
+    border-radius:99px;margin:6px auto 14px auto;
+  }
+  .sheet label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:14px 0 6px 0;
+  }
+  .sheet input[type=text],
+  .sheet input[type=tel],
+  .sheet input[type=date],
+  .sheet input[type=time],
+  .sheet input[type=number],
+  .sheet select,
+  .sheet textarea{
+    width:100%;
+    border:1px solid var(--line-strong);
+    background:var(--surface);
+    border-radius:10px;
+    padding:12px;
+    font-size:15px;
+    color:var(--ink);
+    font-family:inherit;
+  }
+  .sheet textarea{resize:vertical;min-height:64px;}
+  .walk-photo{width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin:8px 0;display:block;}
+  .checkbox-row{
+    display:flex !important;
+    align-items:center;
+    gap:8px;
+    font-size:14px !important;
+    font-weight:500 !important;
+    color:var(--ink) !important;
+  }
+  .checkbox-row input{width:auto !important;}
+  .field-error{color:var(--danger);font-size:12px;margin-top:4px;display:none;}
+  .field-error.show{display:block;}
+  .hint{font-size:12px;color:var(--ink-soft);margin-top:4px;}
+
+  /* Auth gate */
+  .auth-gate{
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .auth-card{
+    width:100%;
+    max-width:360px;
+    background:var(--surface);
+    border-radius:20px;
+    padding:28px 24px;
+    box-shadow:0 4px 16px rgba(34,40,31,0.08);
+  }
+  .auth-card .brand{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ochre);margin-bottom:4px;}
+  .auth-card h1{font-size:24px;font-style:italic;color:var(--pine-dark);margin-bottom:16px;}
+  .auth-card label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px 0;}
+  .auth-card input{
+    width:100%;border:1px solid var(--line-strong);background:var(--bg);
+    border-radius:10px;padding:12px;font-size:15px;color:var(--ink);font-family:inherit;
+  }
+  .topbar-row{display:flex;justify-content:space-between;align-items:center;}
+  .logout-btn{background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;}
+</style>
+</head>
+<body>
+
+<div id="auth-gate" class="auth-gate">
+  <div class="auth-card">
+    <div class="brand">Rota Canina</div>
+    <h1 id="auth-title">Entrar</h1>
+    <div class="field-error" id="auth-error"></div>
+    <label>E-mail</label>
+    <input type="email" id="auth-email" autocomplete="email">
+    <label>Senha</label>
+    <input type="password" id="auth-password" autocomplete="current-password">
+    <div class="sheet-actions" style="flex-direction:column;">
+      <button class="btn-primary" id="auth-submit">Entrar</button>
+      <button class="btn-ghost" id="auth-toggle" style="width:100%;">Ainda não tenho conta</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand">Rota Canina</div>
+      <button class="logout-btn" id="logout-btn">Sair</button>
+    </div>
+    <h1 id="topbar-title">Agenda</h1>
+    <div class="sub" id="topbar-sub"></div>
+  </div>
+
+  <main class="view active" id="view-agenda"></main>
+  <main class="view" id="view-clientes"></main>
+
+  <button class="fab" id="fab" aria-label="Adicionar">+</button>
+
+  <nav class="bottomnav">
+    <button data-view="agenda" class="active">
+      <span class="ic">🗓️</span>Agenda
+    </button>
+    <button data-view="clientes">
+      <span class="ic">🐾</span>Clientes
+    </button>
+  </nav>
+</div>
+
+<div class="sheet-overlay" id="sheet-overlay">
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div id="sheet-content"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAb_rhPbFxSt46uU9JXeEc-GMfVdTzCK6U",
+  authDomain: "rota-canina-b8c59.firebaseapp.com",
+  projectId: "rota-canina-b8c59",
+  storageBucket: "rota-canina-b8c59.firebasestorage.app",
+  messagingSenderId: "101127630560",
+  appId: "1:101127630560:web:a520180844905d4f7b6a85"
+};
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+
+(function(){
+  "use strict";
+
+  /* ---------- IndexedDB layer ---------- */
+  const DB_NAME = 'trilha_db';
+  const DB_VERSION = 1;
+  let db;
+
+  function openDB(){
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e)=>{
+        const d = e.target.result;
+        if(!d.objectStoreNames.contains('clients')){
+          d.createObjectStore('clients', {keyPath:'id', autoIncrement:true});
+        }
+        if(!d.objectStoreNames.contains('dogs')){
+          const s = d.createObjectStore('dogs', {keyPath:'id', autoIncrement:true});
+          s.createIndex('clientId','clientId');
+        }
+        if(!d.objectStoreNames.contains('walks')){
+          const s = d.createObjectStore('walks', {keyPath:'id', autoIncrement:true});
+          s.createIndex('date','date');
+          s.createIndex('clientId','clientId');
+        }
+      };
+      req.onsuccess = (e)=>{ db = e.target.result; resolve(db); };
+      req.onerror = (e)=> reject(e.target.error);
+    });
+  }
+  function store(name, mode){ return db.transaction(name, mode || 'readonly').objectStore(name); }
+  function p(req){
+    return new Promise((res, rej)=>{
+      req.onsuccess = ()=> res(req.result);
+      req.onerror = ()=> rej(req.error);
+    });
+  }
+
+  const Clients = {
+    add: (data)=> p(store('clients','readwrite').add(data)),
+    put: (data)=> p(store('clients','readwrite').put(data)),
+    all: ()=> p(store('clients').getAll()),
+    del: (id)=> p(store('clients','readwrite').delete(id)),
+  };
+  const Dogs = {
+    add: (data)=> p(store('dogs','readwrite').add(data)),
+    put: (data)=> p(store('dogs','readwrite').put(data)),
+    all: ()=> p(store('dogs').getAll()),
+    byClient: (clientId)=> p(store('dogs').index('clientId').getAll(clientId)),
+    del: (id)=> p(store('dogs','readwrite').delete(id)),
+  };
+  const Walks = {
+    add: (data)=> p(store('walks','readwrite').add(data)),
+    put: (data)=> p(store('walks','readwrite').put(data)),
+    all: ()=> p(store('walks').getAll()),
+    del: (id)=> p(store('walks','readwrite').delete(id)),
+  };
+
+  async function deleteDogCascade(dogId){
+    const walks = await Walks.all();
+    for(const w of walks){ if(w.dogId === dogId) await Walks.del(w.id); }
+    await Dogs.del(dogId);
+  }
+  async function deleteClientCascade(clientId){
+    const dogs = await Dogs.byClient(clientId);
+    for(const dgo of dogs){ await deleteDogCascade(dgo.id); }
+    await Clients.del(clientId);
+  }
+
+  /* ---------- Helpers ---------- */
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function addDays(dateStr, n){
+    const d = new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return d.toISOString().slice(0,10);
+  }
+  function dayLabel(dateStr){
+    const d = new Date(dateStr+'T00:00:00');
+    const t = new Date(); t.setHours(0,0,0,0);
+    const diff = Math.round((d - t) / 86400000);
+    if(diff === 0) return 'Hoje';
+    if(diff === 1) return 'Amanhã';
+    const weekday = d.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
+    const day = d.getDate();
+    const month = d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');
+    return `${weekday}, ${day} ${month}`;
+  }
+  function timeLabel(t){ return t; }
+  function esc(str){
+    return (str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function addressLink(c){
+    if(!c || !c.endereco) return '';
+    if(c.lat && c.lon) return `https://www.google.com/maps?q=${c.lat},${c.lon}`;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco)}`;
+  }
+  function whatsappLink(tel){
+    if(!tel) return '';
+    const digits = tel.replace(/\D/g,'');
+    if(!digits) return '';
+    const withCountry = digits.length <= 11 ? '55'+digits : digits;
+    return `https://wa.me/${withCountry}`;
+  }
+  function debounce(fn, delay){
+    let t;
+    return (...args)=>{ clearTimeout(t); t = setTimeout(()=> fn(...args), delay); };
+  }
+
+  /* ---------- Google Places (New) — autocomplete de endereço ---------- */
+  const GOOGLE_MAPS_KEY = 'AIzaSyB_rZOccdW4uWnk-uQhrwUDTTbrebYmvFc';
+  let placesLibPromise = null;
+  function loadGoogleMaps(){
+    return new Promise((resolve, reject)=>{
+      if(window.google && window.google.maps){ resolve(); return; }
+      window.__gmapsReady = resolve;
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&callback=__gmapsReady&loading=async`;
+      s.async = true;
+      s.onerror = ()=> reject(new Error('Falha ao carregar Google Maps'));
+      document.head.appendChild(s);
+    });
+  }
+  async function getPlacesLib(){
+    if(!placesLibPromise){
+      placesLibPromise = loadGoogleMaps().then(()=> google.maps.importLibrary('places'));
+    }
+    return placesLibPromise;
+  }
+  function setupAddressAutocomplete(input, list, latInput, lonInput, bairroInput){
+    let sessionToken = null;
+    const runSearch = debounce(async ()=>{
+      const q = input.value.trim();
+      if(q.length < 4){ list.hidden = true; list.innerHTML=''; return; }
+      try{
+        const { AutocompleteSuggestion, AutocompleteSessionToken } = await getPlacesLib();
+        if(!sessionToken) sessionToken = new AutocompleteSessionToken();
+        const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: q,
+          includedRegionCodes: ['br'],
+          language: 'pt-BR',
+          sessionToken
+        });
+        if(!suggestions || !suggestions.length){ list.hidden = true; list.innerHTML=''; return; }
+        list._suggestions = suggestions;
+        list.innerHTML = suggestions.map((s,i)=>`<li data-i="${i}">${esc(s.placePrediction.text.text)}</li>`).join('');
+        list.hidden = false;
+      }catch(e){
+        console.error('Erro na busca de endereço (Google Places):', e);
+        list.hidden = true;
+      }
+    }, 300);
+    input.addEventListener('input', ()=>{
+      latInput.value = ''; lonInput.value = '';
+      runSearch();
+    });
+    input.addEventListener('blur', ()=>{ setTimeout(()=>{ list.hidden = true; }, 150); });
+    list.addEventListener('click', async (e)=>{
+      const li = e.target.closest('li');
+      if(!li) return;
+      const suggestion = list._suggestions[Number(li.dataset.i)];
+      try{
+        const place = suggestion.placePrediction.toPlace();
+        await place.fetchFields({ fields: ['formattedAddress','location','addressComponents'] });
+        input.value = place.formattedAddress || suggestion.placePrediction.text.text;
+        latInput.value = place.location ? place.location.lat() : '';
+        lonInput.value = place.location ? place.location.lng() : '';
+        if(bairroInput && !bairroInput.value){
+          const comp = (place.addressComponents || []).find(c =>
+            c.types.includes('sublocality_level_1') || c.types.includes('sublocality') || c.types.includes('neighborhood')
+          );
+          if(comp) bairroInput.value = comp.longText;
+        }
+      }catch(err){
+        console.error('Erro ao buscar detalhes do endereço:', err);
+        input.value = suggestion.placePrediction.text.text;
+      }
+      list.hidden = true;
+      sessionToken = null;
+    });
+  }
+
+  /* ---------- Sheet (bottom modal) ---------- */
+  const sheetOverlay = document.getElementById('sheet-overlay');
+  const sheetContent = document.getElementById('sheet-content');
+  function openSheet(html, onMount){
+    sheetContent.innerHTML = html;
+    sheetOverlay.classList.add('open');
+    if(onMount) onMount(sheetContent);
+  }
+  function closeSheet(){
+    sheetOverlay.classList.remove('open');
+  }
+  sheetOverlay.addEventListener('click', (e)=>{
+    if(e.target === sheetOverlay) closeSheet();
+  });
+
+  /* ---------- Navigation ---------- */
+  const views = {
+    agenda: document.getElementById('view-agenda'),
+    clientes: document.getElementById('view-clientes'),
+  };
+  const navButtons = document.querySelectorAll('.bottomnav button');
+  const topbarTitle = document.getElementById('topbar-title');
+  const topbarSub = document.getElementById('topbar-sub');
+  let currentView = 'agenda';
+
+  function setView(name){
+    currentView = name;
+    Object.entries(views).forEach(([k, el])=> el.classList.toggle('active', k===name));
+    navButtons.forEach(b=> b.classList.toggle('active', b.dataset.view===name));
+    if(name === 'agenda'){
+      topbarTitle.textContent = 'Agenda';
+      topbarSub.textContent = 'Passeios marcados a partir de hoje';
+      renderAgenda();
+    } else {
+      topbarTitle.textContent = 'Clientes';
+      topbarSub.textContent = 'Tutores e cães cadastrados';
+      renderClientes();
+    }
+  }
+  navButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=> setView(btn.dataset.view));
+  });
+
+  /* ---------- FAB ---------- */
+  document.getElementById('fab').addEventListener('click', ()=>{
+    if(currentView === 'agenda') openNovoPasseio();
+    else openNovoCliente();
+  });
+
+  /* ================= AGENDA ================= */
+  async function renderAgenda(){
+    const [walks, clients, dogs] = await Promise.all([Walks.all(), Clients.all(), Dogs.all()]);
+    const clientMap = Object.fromEntries(clients.map(c=>[c.id,c]));
+    const dogMap = Object.fromEntries(dogs.map(d=>[d.id,d]));
+    const today = todayStr();
+    const upcoming = walks
+      .filter(w => w.status !== 'cancelado' && w.date >= today)
+      .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+
+    if(upcoming.length === 0){
+      views.agenda.innerHTML = `
+        <div class="empty-state">
+          <span class="glyph">🐾</span>
+          <p>Nenhum passeio agendado ainda.<br>Toque em <strong>+</strong> para marcar o primeiro.</p>
+        </div>`;
+      return;
+    }
+
+    const byDate = {};
+    upcoming.forEach(w=>{ (byDate[w.date] = byDate[w.date] || []).push(w); });
+
+    let html = '';
+    Object.keys(byDate).sort().forEach(date=>{
+      html += `<div class="day-group">
+        <div class="day-head"><span class="label">${dayLabel(date)}</span><span class="rule"></span></div>
+        <ul class="walks-list">`;
+      byDate[date].forEach(w=>{
+        const dog = dogMap[w.dogId];
+        const client = clientMap[w.clientId];
+        const statusClass = w.status === 'concluido' ? 'status-concluido' : (w.status === 'cancelado' ? 'status-cancelado' : '');
+        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.photo ? ' 📷' : ''}</span>` : '<span class="status-pill">Agendado</span>';
+        html += `<li class="walk-card ${statusClass}" data-id="${w.id}">
+          <div class="walk-top">
+            <div>
+              <div class="walk-time">${timeLabel(w.time)}</div>
+              <div class="walk-dog">${esc(dog ? dog.nome : 'Cão removido')}</div>
+              <div class="walk-client">${esc(client ? client.nome : 'Cliente removido')}</div>
+            </div>
+            ${pill}
+          </div>
+        </li>`;
+      });
+      html += `</ul></div>`;
+    });
+    views.agenda.innerHTML = html;
+
+    views.agenda.querySelectorAll('.walk-card').forEach(card=>{
+      card.addEventListener('click', ()=> openWalkDetail(Number(card.dataset.id)));
+    });
+  }
+
+  async function openNovoPasseio(){
+    const clients = await Clients.all();
+    if(clients.length === 0){
+      openSheet(`
+        <h2>Novo passeio</h2>
+        <p class="hint">Você ainda não tem clientes cadastrados. Cadastre um cliente e o cão dele primeiro.</p>
+        <div class="sheet-actions">
+          <button class="btn-primary" id="go-clientes">Cadastrar cliente</button>
+        </div>
+      `, (el)=>{
+        el.querySelector('#go-clientes').addEventListener('click', ()=>{
+          closeSheet(); setView('clientes'); openNovoCliente();
+        });
+      });
+      return;
+    }
+
+    const options = clients.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+    openSheet(`
+      <h2>Novo passeio</h2>
+      <label>Cliente</label>
+      <select id="f-cliente"><option value="">Selecione</option>${options}</select>
+
+      <label>Cão</label>
+      <select id="f-cao" disabled><option value="">Selecione o cliente primeiro</option></select>
+
+      <label>Data</label>
+      <input type="date" id="f-data" value="${todayStr()}">
+
+      <label>Horário</label>
+      <input type="time" id="f-hora" value="09:00">
+
+      <label class="checkbox-row"><input type="checkbox" id="f-repetir"> Repetir semanalmente</label>
+      <div id="f-semanas-wrap" style="display:none;">
+        <label>Por quantas semanas (incluindo esta)</label>
+        <input type="number" id="f-semanas" min="2" max="12" value="4">
+      </div>
+
+      <div class="field-error" id="f-error">Selecione cliente, cão, data e horário.</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-passeio">Agendar</button>
+      </div>
+    `, (el)=>{
+      const selCliente = el.querySelector('#f-cliente');
+      const selCao = el.querySelector('#f-cao');
+      const chkRepetir = el.querySelector('#f-repetir');
+      const semanasWrap = el.querySelector('#f-semanas-wrap');
+
+      selCliente.addEventListener('change', async ()=>{
+        const cid = Number(selCliente.value);
+        if(!cid){ selCao.innerHTML = '<option value="">Selecione o cliente primeiro</option>'; selCao.disabled = true; return; }
+        const dogs = await Dogs.byClient(cid);
+        if(dogs.length === 0){
+          selCao.innerHTML = '<option value="">Este cliente não tem cão cadastrado</option>';
+          selCao.disabled = true;
+        } else {
+          selCao.innerHTML = '<option value="">Selecione</option>' + dogs.map(d=>`<option value="${d.id}">${esc(d.nome)}</option>`).join('');
+          selCao.disabled = false;
+        }
+      });
+
+      chkRepetir.addEventListener('change', ()=>{
+        semanasWrap.style.display = chkRepetir.checked ? 'block' : 'none';
+      });
+
+      el.querySelector('#save-passeio').addEventListener('click', async ()=>{
+        const clientId = Number(selCliente.value);
+        const dogId = Number(selCao.value);
+        const date = el.querySelector('#f-data').value;
+        const time = el.querySelector('#f-hora').value;
+        const errorEl = el.querySelector('#f-error');
+        if(!clientId || !dogId || !date || !time){
+          errorEl.classList.add('show');
+          return;
+        }
+        errorEl.classList.remove('show');
+
+        const weeks = chkRepetir.checked ? Math.max(2, Number(el.querySelector('#f-semanas').value) || 4) : 1;
+        for(let i=0;i<weeks;i++){
+          await Walks.add({
+            clientId, dogId,
+            date: addDays(date, i*7),
+            time,
+            status: 'agendado',
+            createdAt: Date.now()
+          });
+        }
+        closeSheet();
+        renderAgenda();
+      });
+    });
+  }
+
+  function openWalkDetail(walkId){
+    Walks.all().then(async (walks)=>{
+      const w = walks.find(x=>x.id===walkId);
+      if(!w) return;
+      const [client, dogs] = await Promise.all([Clients.all(), Dogs.all()]);
+      const c = client.find(x=>x.id===w.clientId);
+      const dg = dogs.find(x=>x.id===w.dogId);
+
+      const reportHtml = w.status === 'concluido' ? `
+        <div class="client-info">
+          ${w.photo ? `<img class="walk-photo" id="walk-photo-preview" alt="Foto do passeio">` : ''}
+          <div class="info-row">${w.report && w.report.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
+          <div class="info-row">${w.report && w.report.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
+          ${w.report && w.report.comportamento ? `<div class="info-row">🐾 ${esc(w.report.comportamento)}</div>` : ''}
+          ${w.report && w.report.observacoes ? `<div class="info-row">📝 ${esc(w.report.observacoes)}</div>` : ''}
+        </div>
+      ` : '';
+
+      openSheet(`
+        <h2>${dayLabel(w.date)} às ${w.time}</h2>
+        <p class="hint">${esc(dg ? dg.nome : 'Cão removido')} · ${esc(c ? c.nome : 'Cliente removido')}</p>
+        <div class="client-info">
+          <div class="info-row">📍 ${c && c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
+          ${c && c.telefone ? `<div class="info-row">💬 <a class="addr-link" href="${whatsappLink(c.telefone)}" target="_blank" rel="noopener">${esc(c.telefone)}</a></div>` : ''}
+        </div>
+        ${reportHtml}
+        <div class="sheet-actions" style="flex-direction:column;">
+          ${w.status !== 'concluido' ? '<button class="btn-primary" id="mark-done">Finalizar passeio</button>' : '<button class="btn-secondary" id="edit-report">Editar registro</button>'}
+          ${w.status !== 'cancelado' ? '<button class="btn-secondary" id="cancel-walk">Cancelar passeio</button>' : ''}
+          <button class="btn-ghost danger" id="del-walk">Excluir passeio</button>
+        </div>
+      `, (el)=>{
+        if(w.photo){
+          const img = el.querySelector('#walk-photo-preview');
+          if(img) img.src = URL.createObjectURL(w.photo);
+        }
+        const doneBtn = el.querySelector('#mark-done');
+        if(doneBtn) doneBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
+        const editBtn = el.querySelector('#edit-report');
+        if(editBtn) editBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
+        const cancelBtn = el.querySelector('#cancel-walk');
+        if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
+          w.status = 'cancelado'; await Walks.put(w); closeSheet(); renderAgenda();
+        });
+        el.querySelector('#del-walk').addEventListener('click', async ()=>{
+          if(confirm('Excluir este passeio?')){
+            await Walks.del(w.id); closeSheet(); renderAgenda();
+          }
+        });
+      });
+    });
+  }
+
+  function openFinalizarPasseio(w, dg, c){
+    const rep = w.report || {};
+    openSheet(`
+      <h2>Finalizar passeio</h2>
+      <p class="hint">${esc(dg ? dg.nome : 'Cão')} · ${esc(c ? c.nome : 'Cliente')}</p>
+
+      <label>Foto do passeio</label>
+      ${w.photo ? `<img class="walk-photo" id="current-photo-preview">` : ''}
+      <input type="file" accept="image/*" capture="environment" id="f-foto">
+      <img id="new-photo-preview" class="walk-photo" hidden>
+
+      <label class="checkbox-row"><input type="checkbox" id="f-xixi" ${rep.xixi ? 'checked' : ''}> Fez xixi</label>
+      <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" id="f-coco" ${rep.coco ? 'checked' : ''}> Fez cocô</label>
+
+      <label>Comportamento</label>
+      <select id="f-comportamento">
+        <option value="">Não informado</option>
+        <option value="Tranquilo">Tranquilo</option>
+        <option value="Agitado">Agitado</option>
+        <option value="Ansioso">Ansioso</option>
+        <option value="Cansado">Cansado</option>
+      </select>
+
+      <label>Observações</label>
+      <textarea id="f-obs" placeholder="Algo que o tutor deveria saber...">${esc(rep.observacoes)}</textarea>
+
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-finalizar">Salvar e finalizar</button>
+      </div>
+    `, (el)=>{
+      if(w.photo){
+        el.querySelector('#current-photo-preview').src = URL.createObjectURL(w.photo);
+      }
+      const selComp = el.querySelector('#f-comportamento');
+      if(rep.comportamento) selComp.value = rep.comportamento;
+
+      const fileInput = el.querySelector('#f-foto');
+      const newPreview = el.querySelector('#new-photo-preview');
+      fileInput.addEventListener('change', ()=>{
+        const file = fileInput.files[0];
+        if(!file) return;
+        newPreview.src = URL.createObjectURL(file);
+        newPreview.hidden = false;
+      });
+
+      el.querySelector('#save-finalizar').addEventListener('click', async ()=>{
+        const file = fileInput.files[0];
+        w.status = 'concluido';
+        w.finalizedAt = Date.now();
+        w.report = {
+          xixi: el.querySelector('#f-xixi').checked,
+          coco: el.querySelector('#f-coco').checked,
+          comportamento: selComp.value,
+          observacoes: el.querySelector('#f-obs').value.trim()
+        };
+        if(file) w.photo = file;
+        await Walks.put(w);
+        closeSheet();
+        renderAgenda();
+      });
+    });
+  }
+
+
+  async function renderClientes(){
+    const clients = await Clients.all();
+    if(clients.length === 0){
+      views.clientes.innerHTML = `
+        <div class="empty-state">
+          <span class="glyph">🐕</span>
+          <p>Nenhum cliente cadastrado ainda.<br>Toque em <strong>+</strong> para adicionar o primeiro.</p>
+        </div>`;
+      return;
+    }
+    const allDogs = await Dogs.all();
+    const byBairro = {};
+    clients.forEach(c=>{
+      const key = (c.bairro || '').trim() || 'Sem bairro definido';
+      (byBairro[key] = byBairro[key] || []).push(c);
+    });
+    const bairros = Object.keys(byBairro).sort((a,b)=>{
+      if(a === 'Sem bairro definido') return 1;
+      if(b === 'Sem bairro definido') return -1;
+      return a.localeCompare(b, 'pt-BR');
+    });
+
+    let html = '';
+    bairros.forEach(bairro=>{
+      const group = byBairro[bairro].sort((a,b)=> a.nome.localeCompare(b.nome, 'pt-BR'));
+      html += `<div class="day-group">
+        <div class="day-head"><span class="label">${esc(bairro)}</span><span class="rule"></span></div>`;
+      group.forEach(c=>{
+        const dogCount = allDogs.filter(d=>d.clientId===c.id).length;
+        html += `<div class="client-card" data-id="${c.id}">
+          <div class="client-head">
+            <div>
+              <div class="client-name">${esc(c.nome)}</div>
+              <div class="client-sub">${c.telefone ? `<a class="addr-link" href="${whatsappLink(c.telefone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 ${esc(c.telefone)}</a>` : 'Sem telefone'}</div>
+            </div>
+            <span class="dog-badge">${dogCount} 🐾</span>
+          </div>
+          <div class="client-dogs" hidden></div>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    views.clientes.innerHTML = html;
+
+    views.clientes.querySelectorAll('.client-card').forEach(card=>{
+      const head = card.querySelector('.client-head');
+      const body = card.querySelector('.client-dogs');
+      head.addEventListener('click', async ()=>{
+        const isHidden = body.hasAttribute('hidden');
+        views.clientes.querySelectorAll('.client-dogs').forEach(b=> b.setAttribute('hidden',''));
+        if(isHidden){
+          body.removeAttribute('hidden');
+          await renderClientDogs(Number(card.dataset.id), body);
+        }
+      });
+    });
+  }
+
+  async function renderClientDogs(clientId, container){
+    const [client, dogs] = await Promise.all([Clients.all(), Dogs.byClient(clientId)]);
+    const c = client.find(x=>x.id===clientId);
+    let html = `<div class="client-info">
+      <div class="info-row">📍 ${c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
+    </div>`;
+    if(dogs.length === 0){
+      html += `<p class="hint">Nenhum cão cadastrado para este cliente.</p>`;
+    } else {
+      dogs.forEach(d=>{
+        html += `<div class="dog-chip" data-dog-id="${d.id}">
+          <div>
+            <div>${esc(d.nome)}</div>
+            <div class="dog-meta">${esc(d.raca) || 'Raça não informada'}</div>
+          </div>
+          <div class="dog-actions">
+            <button class="btn-ghost danger del-dog">Excluir</button>
+          </div>
+        </div>`;
+      });
+    }
+    html += `<div class="client-actions">
+      <button class="btn-secondary add-dog-btn">+ Adicionar cão</button>
+    </div>
+    <div class="client-actions">
+      <button class="btn-ghost edit-client-btn">Editar cliente</button>
+      <button class="btn-ghost danger del-client-btn">Excluir cliente</button>
+    </div>`;
+    container.innerHTML = html;
+
+    container.querySelector('.add-dog-btn').addEventListener('click', ()=> openNovoCao(clientId, c.nome));
+    container.querySelector('.edit-client-btn').addEventListener('click', ()=> openEditCliente(c));
+    container.querySelector('.del-client-btn').addEventListener('click', async ()=>{
+      if(confirm(`Excluir ${c.nome} e todos os cães e passeios vinculados?`)){
+        await deleteClientCascade(clientId);
+        renderClientes();
+      }
+    });
+    container.querySelectorAll('.del-dog').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        const dogId = Number(e.target.closest('.dog-chip').dataset.dogId);
+        if(confirm('Excluir este cão e os passeios agendados dele?')){
+          await deleteDogCascade(dogId);
+          renderClientDogs(clientId, container);
+          renderClientes();
+        }
+      });
+    });
+  }
+
+  function openNovoCliente(){
+    openSheet(`
+      <h2>Novo cliente</h2>
+      <label>Nome</label>
+      <input type="text" id="f-nome" placeholder="Nome do tutor">
+      <label>Telefone</label>
+      <input type="tel" id="f-telefone" placeholder="(51) 9....-....">
+      <label>Endereço</label>
+      <div style="position:relative;">
+        <input type="text" id="f-endereco" placeholder="Comece a digitar..." autocomplete="off">
+        <ul class="addr-list" id="addr-suggestions" hidden></ul>
+      </div>
+      <input type="hidden" id="f-lat">
+      <input type="hidden" id="f-lon">
+      <label>Bairro</label>
+      <input type="text" id="f-bairro" placeholder="Preenche sozinho ao escolher o endereço">
+      <div class="hint">Escolha um endereço da lista pra ficar certinho no mapa depois</div>
+      <div class="field-error" id="f-error">Informe ao menos o nome do cliente.</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-cliente">Salvar e continuar</button>
+      </div>
+    `, (el)=>{
+      setupAddressAutocomplete(
+        el.querySelector('#f-endereco'),
+        el.querySelector('#addr-suggestions'),
+        el.querySelector('#f-lat'),
+        el.querySelector('#f-lon'),
+        el.querySelector('#f-bairro')
+      );
+      el.querySelector('#save-cliente').addEventListener('click', async ()=>{
+        const nome = el.querySelector('#f-nome').value.trim();
+        if(!nome){ el.querySelector('#f-error').classList.add('show'); return; }
+        const lat = el.querySelector('#f-lat').value;
+        const lon = el.querySelector('#f-lon').value;
+        const id = await Clients.add({
+          nome,
+          telefone: el.querySelector('#f-telefone').value.trim(),
+          endereco: el.querySelector('#f-endereco').value.trim(),
+          bairro: el.querySelector('#f-bairro').value.trim(),
+          lat: lat ? Number(lat) : null,
+          lon: lon ? Number(lon) : null,
+          createdAt: Date.now()
+        });
+        openNovoCao(id, nome, true);
+      });
+    });
+  }
+
+  function openEditCliente(c){
+    openSheet(`
+      <h2>Editar cliente</h2>
+      <label>Nome</label>
+      <input type="text" id="f-nome" value="${esc(c.nome)}">
+      <label>Telefone</label>
+      <input type="tel" id="f-telefone" value="${esc(c.telefone)}">
+      <label>Endereço</label>
+      <div style="position:relative;">
+        <input type="text" id="f-endereco" value="${esc(c.endereco)}" autocomplete="off">
+        <ul class="addr-list" id="addr-suggestions" hidden></ul>
+      </div>
+      <input type="hidden" id="f-lat" value="${c.lat || ''}">
+      <input type="hidden" id="f-lon" value="${c.lon || ''}">
+      <label>Bairro</label>
+      <input type="text" id="f-bairro" value="${esc(c.bairro)}">
+      <div class="hint">Se reescrever o endereço, escolha de novo na lista pra manter o mapa certo</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-cliente">Salvar alterações</button>
+      </div>
+    `, (el)=>{
+      setupAddressAutocomplete(
+        el.querySelector('#f-endereco'),
+        el.querySelector('#addr-suggestions'),
+        el.querySelector('#f-lat'),
+        el.querySelector('#f-lon')
+      );
+      el.querySelector('#save-cliente').addEventListener('click', async ()=>{
+        const nome = el.querySelector('#f-nome').value.trim();
+        if(!nome) return;
+        const lat = el.querySelector('#f-lat').value;
+        const lon = el.querySelector('#f-lon').value;
+        c.nome = nome;
+        c.telefone = el.querySelector('#f-telefone').value.trim();
+        c.endereco = el.querySelector('#f-endereco').value.trim();
+        c.bairro = el.querySelector('#f-bairro').value.trim();
+        c.lat = lat ? Number(lat) : null;
+        c.lon = lon ? Number(lon) : null;
+        await Clients.put(c);
+        closeSheet();
+        renderClientes();
+      });
+    });
+  }
+
+  function openNovoCao(clientId, clientName, isFirst){
+    openSheet(`
+      <h2>${isFirst ? 'Adicionar cão de ' + esc(clientName) : 'Novo cão'}</h2>
+      <label>Nome do cão</label>
+      <input type="text" id="f-cnome" placeholder="Nome do cão">
+      <label>Raça</label>
+      <input type="text" id="f-craca" placeholder="Raça (opcional)">
+      <label>Observações</label>
+      <textarea id="f-cobs" placeholder="Alergias, comportamento, cuidados..."></textarea>
+      <div class="field-error" id="f-error">Informe o nome do cão.</div>
+      <div class="sheet-actions">
+        ${isFirst ? '<button class="btn-secondary" id="skip">Pular por enquanto</button>' : ''}
+        <button class="btn-primary" id="save-cao">Salvar cão</button>
+      </div>
+    `, (el)=>{
+      const skipBtn = el.querySelector('#skip');
+      if(skipBtn) skipBtn.addEventListener('click', ()=>{ closeSheet(); renderClientes(); });
+
+      el.querySelector('#save-cao').addEventListener('click', async ()=>{
+        const nome = el.querySelector('#f-cnome').value.trim();
+        if(!nome){ el.querySelector('#f-error').classList.add('show'); return; }
+        await Dogs.add({
+          clientId,
+          nome,
+          raca: el.querySelector('#f-craca').value.trim(),
+          obs: el.querySelector('#f-cobs').value.trim(),
+          createdAt: Date.now()
+        });
+        closeSheet();
+        setView('clientes');
+      });
+    });
+  }
+
+  /* ---------- Autenticação (Firebase) ---------- */
+  const authGate = document.getElementById('auth-gate');
+  const appRoot = document.getElementById('app');
+  const authEmail = document.getElementById('auth-email');
+  const authPassword = document.getElementById('auth-password');
+  const authError = document.getElementById('auth-error');
+  const authSubmit = document.getElementById('auth-submit');
+  const authToggle = document.getElementById('auth-toggle');
+  const authTitle = document.getElementById('auth-title');
+  let isSignup = false;
+  let dbReady = false;
+
+  function traduzErroFirebase(code){
+    const map = {
+      'auth/invalid-email': 'E-mail inválido.',
+      'auth/user-not-found': 'Usuário não encontrado.',
+      'auth/wrong-password': 'Senha incorreta.',
+      'auth/invalid-credential': 'E-mail ou senha incorretos.',
+      'auth/email-already-in-use': 'Já existe uma conta com esse e-mail.',
+      'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+      'auth/missing-password': 'Digite uma senha.'
+    };
+    return map[code] || 'Não foi possível completar. Tente de novo.';
+  }
+
+  authToggle.addEventListener('click', ()=>{
+    isSignup = !isSignup;
+    authTitle.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    authSubmit.textContent = isSignup ? 'Criar conta' : 'Entrar';
+    authToggle.textContent = isSignup ? 'Já tenho conta' : 'Ainda não tenho conta';
+    authError.classList.remove('show');
+  });
+
+  authSubmit.addEventListener('click', async ()=>{
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    authError.classList.remove('show');
+    if(!email || !password){
+      authError.textContent = 'Preencha e-mail e senha.';
+      authError.classList.add('show');
+      return;
+    }
+    authSubmit.disabled = true;
+    try{
+      if(isSignup){
+        await createUserWithEmailAndPassword(fbAuth, email, password);
+      } else {
+        await signInWithEmailAndPassword(fbAuth, email, password);
+      }
+    }catch(err){
+      authError.textContent = traduzErroFirebase(err.code);
+      authError.classList.add('show');
+    }
+    authSubmit.disabled = false;
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', ()=> signOut(fbAuth));
+
+  onAuthStateChanged(fbAuth, async (user)=>{
+    if(user){
+      authGate.style.display = 'none';
+      appRoot.style.display = '';
+      if(!dbReady){
+        try{
+          await openDB();
+          dbReady = true;
+          renderAgenda();
+        }catch(err){
+          document.getElementById('view-agenda').innerHTML =
+            '<div class="empty-state"><p>Não foi possível abrir o banco de dados local neste navegador.</p></div>';
+          console.error(err);
+        }
+      }
+    } else {
+      authGate.style.display = 'flex';
+      appRoot.style.display = 'none';
+    }
+  });
+
+  if('serviceWorker' in navigator){
+    // Registration is a no-op inside this preview sandbox; it activates once
+    // the file is hosted for real (e.g. GitHub Pages), enabling offline use.
+    window.addEventListener('load', ()=>{
+      try{
+        const swCode = `self.addEventListener('fetch', ()=>{});`;
+        const blob = new Blob([swCode], {type:'application/javascript'});
+        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+      }catch(e){}
+    });
+  }
+})();
+</script>
+</body>
+</html>
