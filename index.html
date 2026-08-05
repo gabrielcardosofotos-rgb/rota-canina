@@ -40,7 +40,7 @@
     margin:0 0 4px 0;
     letter-spacing:-0.01em;
   }
-  #app{
+  #app, #client-app{
     max-width:520px;
     margin:0 auto;
     height:100dvh;
@@ -435,6 +435,18 @@
   </nav>
 </div>
 
+<div id="client-app" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand">Rota Canina</div>
+      <button class="logout-btn" id="client-logout-btn">Sair</button>
+    </div>
+    <h1 id="client-title">Seu painel</h1>
+    <div class="sub">Acompanhamento do passeio</div>
+  </div>
+  <main class="view active" id="client-content"></main>
+</div>
+
 <div class="sheet-overlay" id="sheet-overlay">
   <div class="sheet" id="sheet">
     <div class="sheet-handle"></div>
@@ -463,9 +475,9 @@ const firestoreDb = getFirestore(fbApp);
   "use strict";
 
   /* ---------- Firestore layer (dados na nuvem) ---------- */
-  let uid = null;
-  function colRef(name){ return collection(firestoreDb, 'users', uid, name); }
-  function docRef(name, id){ return doc(firestoreDb, 'users', uid, name, id); }
+  const ADMIN_UID = 'VUXMg2U6uNZLyQNhaDCc333kXoO2';
+  function colRef(name){ return collection(firestoreDb, 'users', ADMIN_UID, name); }
+  function docRef(name, id){ return doc(firestoreDb, 'users', ADMIN_UID, name, id); }
 
   const Clients = {
     add: async (data)=> (await addDoc(colRef('clients'), data)).id,
@@ -1026,6 +1038,7 @@ const firestoreDb = getFirestore(fbApp);
     const c = client.find(x=>x.id===clientId);
     let html = `<div class="client-info">
       <div class="info-row">📍 ${c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
+      <div class="info-row">✉️ ${c.email ? esc(c.email) : '<span class="hint">E-mail não informado</span>'}</div>
     </div>`;
     if(dogs.length === 0){
       html += `<p class="hint">Nenhum cão cadastrado para este cliente.</p>`;
@@ -1078,6 +1091,8 @@ const firestoreDb = getFirestore(fbApp);
       <input type="text" id="f-nome" placeholder="Nome do tutor">
       <label>Telefone</label>
       <input type="tel" id="f-telefone" placeholder="(51) 9....-....">
+      <label>E-mail (pra dar acesso ao cliente depois)</label>
+      <input type="email" id="f-email" placeholder="email@exemplo.com">
       <label>Endereço</label>
       <div style="position:relative;">
         <input type="text" id="f-endereco" placeholder="Comece a digitar..." autocomplete="off">
@@ -1108,6 +1123,7 @@ const firestoreDb = getFirestore(fbApp);
         const id = await Clients.add({
           nome,
           telefone: el.querySelector('#f-telefone').value.trim(),
+          email: el.querySelector('#f-email').value.trim().toLowerCase(),
           endereco: el.querySelector('#f-endereco').value.trim(),
           bairro: el.querySelector('#f-bairro').value.trim(),
           lat: lat ? Number(lat) : null,
@@ -1126,6 +1142,8 @@ const firestoreDb = getFirestore(fbApp);
       <input type="text" id="f-nome" value="${esc(c.nome)}">
       <label>Telefone</label>
       <input type="tel" id="f-telefone" value="${esc(c.telefone)}">
+      <label>E-mail (pra dar acesso ao cliente depois)</label>
+      <input type="email" id="f-email" value="${esc(c.email)}" placeholder="email@exemplo.com">
       <label>Endereço</label>
       <div style="position:relative;">
         <input type="text" id="f-endereco" value="${esc(c.endereco)}" autocomplete="off">
@@ -1153,6 +1171,7 @@ const firestoreDb = getFirestore(fbApp);
         const lon = el.querySelector('#f-lon').value;
         c.nome = nome;
         c.telefone = el.querySelector('#f-telefone').value.trim();
+        c.email = el.querySelector('#f-email').value.trim().toLowerCase();
         c.endereco = el.querySelector('#f-endereco').value.trim();
         c.bairro = el.querySelector('#f-bairro').value.trim();
         c.lat = lat ? Number(lat) : null;
@@ -1198,9 +1217,83 @@ const firestoreDb = getFirestore(fbApp);
     });
   }
 
+  /* ---------- Visão do cliente (somente leitura) ---------- */
+  async function renderClientView(email){
+    const content = document.getElementById('client-content');
+    content.innerHTML = '<div class="empty-state"><p>Carregando...</p></div>';
+    try{
+      const snap = await getDocs(query(colRef('clients'), where('email','==', email)));
+      if(snap.empty){
+        content.innerHTML = '<div class="empty-state"><p>Não encontramos seu cadastro. Fale com o seu passeador.</p></div>';
+        return;
+      }
+      const clientDoc = snap.docs[0];
+      const client = { id: clientDoc.id, ...clientDoc.data() };
+      document.getElementById('client-title').textContent = client.nome;
+
+      const [dogsSnap, walksSnap] = await Promise.all([
+        getDocs(query(colRef('dogs'), where('clientId','==', client.id))),
+        getDocs(query(colRef('walks'), where('clientId','==', client.id)))
+      ]);
+      const dogs = dogsSnap.docs.map(d=>({id:d.id, ...d.data()}));
+      const walks = walksSnap.docs.map(d=>({id:d.id, ...d.data()}));
+      const dogMap = Object.fromEntries(dogs.map(d=>[d.id,d]));
+
+      const today = todayStr();
+      const proximo = walks
+        .filter(w=> w.status==='agendado' && w.date>=today)
+        .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time))[0];
+      const historico = walks
+        .filter(w=> w.status==='concluido')
+        .sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+
+      const dogNames = dogs.map(d=>esc(d.nome)).join(', ') || 'Nenhum cão cadastrado ainda';
+
+      let html = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
+
+      html += `<h2 style="margin-top:22px;margin-bottom:10px;">Próximo passeio</h2>`;
+      if(proximo){
+        const dg = dogMap[proximo.dogId];
+        html += `<div class="walk-card" style="margin-left:0;">
+          <div class="walk-top">
+            <div>
+              <div class="walk-time">${proximo.time}</div>
+              <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+              <div class="walk-client">${dayLabel(proximo.date)}</div>
+            </div>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="empty-state"><p>Nenhum passeio agendado por enquanto.</p></div>`;
+      }
+
+      html += `<h2 style="margin-top:26px;margin-bottom:10px;">Histórico</h2>`;
+      if(historico.length === 0){
+        html += `<div class="empty-state"><p>Ainda não há passeios concluídos.</p></div>`;
+      } else {
+        historico.forEach(w=>{
+          const dg = dogMap[w.dogId];
+          const rep = w.report || {};
+          html += `<div class="client-info" style="margin-bottom:12px;">
+            <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+            <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
+            <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
+            ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
+            ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
+          </div>`;
+        });
+      }
+      content.innerHTML = html;
+    }catch(err){
+      console.error('Erro ao carregar visão do cliente:', err);
+      content.innerHTML = '<div class="empty-state"><p>Não foi possível carregar seus dados agora. Tente de novo em alguns minutos.</p></div>';
+    }
+  }
+
   /* ---------- Autenticação (Firebase) ---------- */
   const authGate = document.getElementById('auth-gate');
   const appRoot = document.getElementById('app');
+  const clientRoot = document.getElementById('client-app');
   const authEmail = document.getElementById('auth-email');
   const authPassword = document.getElementById('auth-password');
   const authError = document.getElementById('auth-error');
@@ -1255,28 +1348,35 @@ const firestoreDb = getFirestore(fbApp);
   });
 
   document.getElementById('logout-btn').addEventListener('click', ()=> signOut(fbAuth));
+  document.getElementById('client-logout-btn').addEventListener('click', ()=> signOut(fbAuth));
 
   onAuthStateChanged(fbAuth, async (user)=>{
     if(user){
-      uid = user.uid;
       authGate.style.display = 'none';
-      appRoot.style.display = '';
-      if(!dbReady){
-        try{
-          await openPhotoDB();
-          dbReady = true;
-          renderAgenda();
-        }catch(err){
-          document.getElementById('view-agenda').innerHTML =
-            '<div class="empty-state"><p>Não foi possível abrir o armazenamento local de fotos neste navegador.</p></div>';
-          console.error(err);
+      if(user.uid === ADMIN_UID){
+        appRoot.style.display = '';
+        clientRoot.style.display = 'none';
+        if(!dbReady){
+          try{
+            await openPhotoDB();
+            dbReady = true;
+            renderAgenda();
+          }catch(err){
+            document.getElementById('view-agenda').innerHTML =
+              '<div class="empty-state"><p>Não foi possível abrir o armazenamento local de fotos neste navegador.</p></div>';
+            console.error(err);
+          }
         }
+      } else {
+        appRoot.style.display = 'none';
+        clientRoot.style.display = '';
+        renderClientView((user.email || '').toLowerCase());
       }
     } else {
-      uid = null;
       dbReady = false;
       authGate.style.display = 'flex';
       appRoot.style.display = 'none';
+      clientRoot.style.display = 'none';
     }
   });
 
