@@ -1282,22 +1282,24 @@ const firestoreDb = getFirestore(fbApp);
       views.planos.innerHTML = `
         <div class="empty-state">
           <span class="glyph">💳</span>
-          <p>Nenhum plano cadastrado ainda.<br>Toque em <strong>+</strong> pra adicionar o link de assinatura de um plano (criado na InfinitePay).</p>
+          <p>Nenhum plano cadastrado ainda.<br>Toque em <strong>+</strong> pra adicionar um plano (com os links de assinatura criados na InfinitePay).</p>
         </div>`;
       return;
     }
     let html = '';
     planos.forEach(p=>{
+      const variantes = p.variantes && p.variantes.length ? p.variantes : (p.preco ? [{duracao:'', preco:p.preco, link:p.link}] : []);
       html += `<div class="client-card" data-id="${p.id}">
         <div class="client-head" style="cursor:default;">
           <div>
             <div class="client-name">${esc(p.nome)}</div>
-            <div class="client-sub">${esc(p.preco)}</div>
+            <div class="client-sub">${esc(p.frequencia)}</div>
           </div>
           <span class="dog-badge">${p.ativo === false ? 'Inativo' : 'Ativo'}</span>
         </div>
         <div class="client-dogs" style="padding:0 16px 16px 16px;">
           ${p.descricao ? `<div class="info-row">${esc(p.descricao)}</div>` : ''}
+          ${variantes.map(v=>`<div class="info-row">⏱️ ${v.duracao ? esc(v.duracao)+' — ' : ''}${esc(v.preco)}</div>`).join('')}
           <div class="client-actions">
             <button class="btn-ghost edit-plano-btn">Editar</button>
             <button class="btn-ghost danger del-plano-btn">Excluir</button>
@@ -1324,25 +1326,46 @@ const firestoreDb = getFirestore(fbApp);
     openSheet(`
       <h2>Novo plano</h2>
       <label>Nome do plano</label>
-      <input type="text" id="f-pnome" placeholder="Ex: 3x por semana">
-      <label>Preço</label>
-      <input type="text" id="f-ppreco" placeholder="Ex: R$ 200/mês">
+      <input type="text" id="f-pnome" placeholder="Ex: Plano Equilíbrio">
+      <label>Frequência</label>
+      <input type="text" id="f-pfreq" placeholder="Ex: 2x por semana (8 passeios)">
       <label>Descrição (opcional)</label>
       <textarea id="f-pdesc" placeholder="O que está incluso"></textarea>
-      <label>Link de assinatura (da InfinitePay)</label>
-      <input type="text" id="f-plink" placeholder="https://...">
-      <div class="field-error" id="f-error">Informe nome, preço e o link.</div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div class="client-name" style="font-size:15px;">Passeios de 30 min</div>
+        <label>Preço</label>
+        <input type="text" id="f-p30preco" placeholder="Ex: R$296 (R$37 por passeio)">
+        <label>Link de assinatura (InfinitePay)</label>
+        <input type="text" id="f-p30link" placeholder="https://...">
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div class="client-name" style="font-size:15px;">Passeios de 60 min</div>
+        <label>Preço</label>
+        <input type="text" id="f-p60preco" placeholder="Ex: R$456 (R$57 por passeio)">
+        <label>Link de assinatura (InfinitePay)</label>
+        <input type="text" id="f-p60link" placeholder="https://...">
+      </div>
+
+      <div class="field-error" id="f-error">Informe nome, frequência e ao menos uma das durações (preço + link).</div>
       <div class="sheet-actions">
         <button class="btn-primary" id="save-plano">Salvar plano</button>
       </div>
     `, (el)=>{
       el.querySelector('#save-plano').addEventListener('click', async ()=>{
         const nome = el.querySelector('#f-pnome').value.trim();
-        const preco = el.querySelector('#f-ppreco').value.trim();
-        const link = el.querySelector('#f-plink').value.trim();
-        if(!nome || !preco || !link){ el.querySelector('#f-error').classList.add('show'); return; }
+        const frequencia = el.querySelector('#f-pfreq').value.trim();
+        const p30preco = el.querySelector('#f-p30preco').value.trim();
+        const p30link = el.querySelector('#f-p30link').value.trim();
+        const p60preco = el.querySelector('#f-p60preco').value.trim();
+        const p60link = el.querySelector('#f-p60link').value.trim();
+        const variantes = [];
+        if(p30preco && p30link) variantes.push({duracao:'30 min', preco:p30preco, link:p30link});
+        if(p60preco && p60link) variantes.push({duracao:'60 min', preco:p60preco, link:p60link});
+        if(!nome || !frequencia || variantes.length === 0){ el.querySelector('#f-error').classList.add('show'); return; }
         await Planos.add({
-          nome, preco, link,
+          nome, frequencia, variantes,
           descricao: el.querySelector('#f-pdesc').value.trim(),
           ativo: true,
           createdAt: Date.now()
@@ -1354,27 +1377,57 @@ const firestoreDb = getFirestore(fbApp);
   }
 
   function openEditPlano(p){
+    const v30 = (p.variantes || []).find(v=>v.duracao==='30 min') || {};
+    const v60 = (p.variantes || []).find(v=>v.duracao==='60 min') || {};
     openSheet(`
       <h2>Editar plano</h2>
       <label>Nome do plano</label>
       <input type="text" id="f-pnome" value="${esc(p.nome)}">
-      <label>Preço</label>
-      <input type="text" id="f-ppreco" value="${esc(p.preco)}">
+      <label>Frequência</label>
+      <input type="text" id="f-pfreq" value="${esc(p.frequencia)}">
       <label>Descrição (opcional)</label>
       <textarea id="f-pdesc">${esc(p.descricao)}</textarea>
-      <label>Link de assinatura (da InfinitePay)</label>
-      <input type="text" id="f-plink" value="${esc(p.link)}">
-      <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" id="f-pativo" ${p.ativo === false ? '' : 'checked'}> Plano ativo (visível pros clientes)</label>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div class="client-name" style="font-size:15px;">Passeios de 30 min</div>
+        <label>Preço</label>
+        <input type="text" id="f-p30preco" value="${esc(v30.preco)}">
+        <label>Link de assinatura (InfinitePay)</label>
+        <input type="text" id="f-p30link" value="${esc(v30.link)}">
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div class="client-name" style="font-size:15px;">Passeios de 60 min</div>
+        <label>Preço</label>
+        <input type="text" id="f-p60preco" value="${esc(v60.preco)}">
+        <label>Link de assinatura (InfinitePay)</label>
+        <input type="text" id="f-p60link" value="${esc(v60.link)}">
+      </div>
+
+      <label class="checkbox-row" style="margin-top:14px;"><input type="checkbox" id="f-pativo" ${p.ativo === false ? '' : 'checked'}> Plano ativo (visível pros clientes)</label>
+      <div class="field-error" id="f-error">Informe nome, frequência e ao menos uma das durações (preço + link).</div>
       <div class="sheet-actions">
         <button class="btn-primary" id="save-plano">Salvar alterações</button>
       </div>
     `, (el)=>{
       el.querySelector('#save-plano').addEventListener('click', async ()=>{
-        p.nome = el.querySelector('#f-pnome').value.trim();
-        p.preco = el.querySelector('#f-ppreco').value.trim();
+        const nome = el.querySelector('#f-pnome').value.trim();
+        const frequencia = el.querySelector('#f-pfreq').value.trim();
+        const p30preco = el.querySelector('#f-p30preco').value.trim();
+        const p30link = el.querySelector('#f-p30link').value.trim();
+        const p60preco = el.querySelector('#f-p60preco').value.trim();
+        const p60link = el.querySelector('#f-p60link').value.trim();
+        const variantes = [];
+        if(p30preco && p30link) variantes.push({duracao:'30 min', preco:p30preco, link:p30link});
+        if(p60preco && p60link) variantes.push({duracao:'60 min', preco:p60preco, link:p60link});
+        if(!nome || !frequencia || variantes.length === 0){ el.querySelector('#f-error').classList.add('show'); return; }
+        p.nome = nome;
+        p.frequencia = frequencia;
+        p.variantes = variantes;
         p.descricao = el.querySelector('#f-pdesc').value.trim();
-        p.link = el.querySelector('#f-plink').value.trim();
         p.ativo = el.querySelector('#f-pativo').checked;
+        delete p.preco;
+        delete p.link;
         await Planos.put(p);
         closeSheet();
         renderPlanos();
@@ -1462,10 +1515,16 @@ const firestoreDb = getFirestore(fbApp);
         html += `<div class="empty-state"><p>Nenhum plano disponível no momento.</p></div>`;
       } else {
         planos.forEach(p=>{
-          html += `<div class="client-info" style="margin-bottom:12px;">
-            <div class="info-row"><strong>${esc(p.nome)}</strong> — ${esc(p.preco)}</div>
+          const variantes = p.variantes && p.variantes.length ? p.variantes : (p.preco ? [{duracao:'', preco:p.preco, link:p.link}] : []);
+          html += `<div class="client-info" style="margin-bottom:14px;">
+            <div class="info-row"><strong>${esc(p.nome)}</strong></div>
+            ${p.frequencia ? `<div class="info-row">${esc(p.frequencia)}</div>` : ''}
             ${p.descricao ? `<div class="info-row">${esc(p.descricao)}</div>` : ''}
-            <a class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:8px;" href="${esc(p.link)}" target="_blank" rel="noopener">Assinar</a>
+            ${variantes.map(v=>`
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+                <div class="info-row">⏱️ ${v.duracao ? esc(v.duracao)+' — ' : ''}${esc(v.preco)}</div>
+                <a class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:6px;" href="${esc(v.link)}" target="_blank" rel="noopener">Assinar ${esc(v.duracao)}</a>
+              </div>`).join('')}
           </div>`;
         });
       }
