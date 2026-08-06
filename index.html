@@ -55,9 +55,9 @@
     top:0;
     z-index:5;
   }
-  .topbar .brand{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ochre);margin-bottom:2px;}
-  .topbar h1{font-size:26px;font-style:italic;color:var(--pine-dark);}
-  .topbar .sub{font-size:13px;color:var(--ink-soft);}
+  .topbar .brand{font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ochre);margin-bottom:4px;}
+  .topbar h1{font-size:34px;font-style:italic;color:var(--pine-dark);}
+  .topbar .sub{font-size:14px;color:var(--ink-soft);}
   main.view{
     flex:1;
     overflow-y:auto;
@@ -73,7 +73,7 @@
     color:var(--ink-soft);
   }
   .empty-state .glyph{font-size:34px;display:block;margin-bottom:10px;opacity:.7;}
-  .empty-state p{margin:0;font-size:14px;line-height:1.5;}
+  .empty-state p{margin:0;font-size:15px;line-height:1.5;}
 
   /* Agenda */
   .day-group{margin-bottom:26px;}
@@ -127,11 +127,11 @@
   .walk-card.status-cancelado{opacity:.5;}
   .walk-card.status-cancelado::before{background:var(--line-strong);}
   .walk-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .walk-time{font-family:'Fraunces',serif;font-weight:600;font-size:18px;color:var(--pine-dark);}
-  .walk-dog{font-size:15px;font-weight:600;margin-top:2px;}
-  .walk-client{font-size:13px;color:var(--ink-soft);margin-top:1px;}
+  .walk-time{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:var(--pine-dark);}
+  .walk-dog{font-size:16px;font-weight:600;margin-top:2px;}
+  .walk-client{font-size:14px;color:var(--ink-soft);margin-top:1px;}
   .status-pill{
-    font-size:11px;
+    font-size:13px;
     padding:3px 9px;
     border-radius:99px;
     background:var(--surface-alt);
@@ -158,7 +158,7 @@
   .client-name{font-family:'Fraunces',serif;font-weight:600;font-size:16px;}
   .client-sub{font-size:13px;color:var(--ink-soft);margin-top:2px;}
   .dog-badge{
-    font-size:12px;
+    font-size:13px;
     background:var(--surface-alt);
     color:var(--pine-dark);
     padding:4px 10px;
@@ -171,7 +171,7 @@
   }
   .client-dogs[hidden]{display:none;}
   .client-info{padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:4px;}
-  .info-row{font-size:14px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
+  .info-row{font-size:15px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
   .info-row:last-child{margin-bottom:0;}
   .addr-link{color:var(--pine-dark);text-decoration:underline;text-decoration-color:var(--ochre);font-weight:500;}
   .addr-list{
@@ -207,8 +207,8 @@
     font-size:14px;
   }
   .dog-chip:last-of-type{border-bottom:none;}
-  .dog-chip .dog-meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
-  .dog-chip .dog-actions button{font-size:12px;}
+  .dog-chip .dog-meta{color:var(--ink-soft);font-size:13px;margin-top:2px;}
+  .dog-chip .dog-actions button{font-size:13px;}
   .client-actions, .sheet-actions{
     display:flex;
     gap:10px;
@@ -269,7 +269,7 @@
     align-items:center;
     gap:3px;
     padding:6px;
-    font-size:11px;
+    font-size:12px;
     color:var(--ink-soft);
     cursor:pointer;
   }
@@ -360,9 +360,9 @@
     color:var(--ink) !important;
   }
   .checkbox-row input{width:auto !important;}
-  .field-error{color:var(--danger);font-size:12px;margin-top:4px;display:none;}
+  .field-error{color:var(--danger);font-size:13px;margin-top:4px;display:none;}
   .field-error.show{display:block;}
-  .hint{font-size:12px;color:var(--ink-soft);margin-top:4px;}
+  .hint{font-size:13px;color:var(--ink-soft);margin-top:4px;}
 
   /* Auth gate */
   .auth-gate{
@@ -380,7 +380,7 @@
     padding:28px 24px;
     box-shadow:0 4px 16px rgba(34,40,31,0.08);
   }
-  .auth-card .brand{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ochre);margin-bottom:4px;}
+  .auth-card .brand{font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ochre);margin-bottom:6px;}
   .auth-card h1{font-size:24px;font-style:italic;color:var(--pine-dark);margin-bottom:16px;}
   .auth-card label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px 0;}
   .auth-card input{
@@ -388,7 +388,7 @@
     border-radius:10px;padding:12px;font-size:15px;color:var(--ink);font-family:inherit;
   }
   .topbar-row{display:flex;justify-content:space-between;align-items:center;}
-  .logout-btn{background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;}
+  .logout-btn{background:none;border:none;color:var(--ink-soft);font-size:13px;text-decoration:underline;cursor:pointer;padding:0;}
 </style>
 </head>
 <body>
@@ -1047,7 +1047,7 @@ const firestoreDb = getFirestore(fbApp);
         html += `<div class="dog-chip" data-dog-id="${d.id}">
           <div>
             <div>${esc(d.nome)}</div>
-            <div class="dog-meta">${esc(d.raca) || 'Raça não informada'}</div>
+            <div class="dog-meta">${esc(d.raca) || 'Raça não informada'} · ${d.aceitaGrupo === false ? 'Só passeio individual' : 'Aceita passear em grupo'}</div>
           </div>
           <div class="dog-actions">
             <button class="btn-ghost danger del-dog">Excluir</button>
@@ -1192,6 +1192,7 @@ const firestoreDb = getFirestore(fbApp);
       <input type="text" id="f-craca" placeholder="Raça (opcional)">
       <label>Observações</label>
       <textarea id="f-cobs" placeholder="Alergias, comportamento, cuidados..."></textarea>
+      <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" id="f-grupo" checked> Pode passear em grupo com outros cães</label>
       <div class="field-error" id="f-error">Informe o nome do cão.</div>
       <div class="sheet-actions">
         ${isFirst ? '<button class="btn-secondary" id="skip">Pular por enquanto</button>' : ''}
@@ -1209,6 +1210,7 @@ const firestoreDb = getFirestore(fbApp);
           nome,
           raca: el.querySelector('#f-craca').value.trim(),
           obs: el.querySelector('#f-cobs').value.trim(),
+          aceitaGrupo: el.querySelector('#f-grupo').checked,
           createdAt: Date.now()
         });
         closeSheet();
@@ -1240,9 +1242,13 @@ const firestoreDb = getFirestore(fbApp);
       const dogMap = Object.fromEntries(dogs.map(d=>[d.id,d]));
 
       const today = todayStr();
-      const proximo = walks
-        .filter(w=> w.status==='agendado' && w.date>=today)
-        .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time))[0];
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      const monthEnd = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+      const doMes = walks
+        .filter(w=> w.status==='agendado' && w.date>=today && w.date<=monthEnd)
+        .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
       const historico = walks
         .filter(w=> w.status==='concluido')
         .sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
@@ -1251,20 +1257,22 @@ const firestoreDb = getFirestore(fbApp);
 
       let html = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
 
-      html += `<h2 style="margin-top:22px;margin-bottom:10px;">Próximo passeio</h2>`;
-      if(proximo){
-        const dg = dogMap[proximo.dogId];
-        html += `<div class="walk-card" style="margin-left:0;">
-          <div class="walk-top">
-            <div>
-              <div class="walk-time">${proximo.time}</div>
-              <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
-              <div class="walk-client">${dayLabel(proximo.date)}</div>
-            </div>
-          </div>
-        </div>`;
+      html += `<h2 style="margin-top:22px;margin-bottom:10px;">Passeios deste mês</h2>`;
+      if(doMes.length === 0){
+        html += `<div class="empty-state"><p>Nenhum passeio agendado neste mês ainda.</p></div>`;
       } else {
-        html += `<div class="empty-state"><p>Nenhum passeio agendado por enquanto.</p></div>`;
+        doMes.forEach(w=>{
+          const dg = dogMap[w.dogId];
+          html += `<div class="walk-card" style="margin-left:0;margin-bottom:10px;">
+            <div class="walk-top">
+              <div>
+                <div class="walk-time">${w.time}</div>
+                <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+                <div class="walk-client">${dayLabel(w.date)}</div>
+              </div>
+            </div>
+          </div>`;
+        });
       }
 
       html += `<h2 style="margin-top:26px;margin-bottom:10px;">Histórico</h2>`;
