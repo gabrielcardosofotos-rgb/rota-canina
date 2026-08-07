@@ -216,6 +216,10 @@
   .month-toggle.open .chev{transform:rotate(180deg);}
   .month-items{margin-bottom:10px;}
 
+  /* Página do cliente: textos centralizados, exceto parágrafos livres */
+  #client-content{text-align:center;}
+  #client-content .freetext{text-align:left;}
+
   .info-row{font-size:15px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
   .info-row:last-child{margin-bottom:0;}
   .addr-link{color:var(--pine-dark);text-decoration:underline;text-decoration-color:var(--ochre);font-weight:500;}
@@ -1562,7 +1566,7 @@ const firestoreDb = getFirestore(fbApp);
           <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
           <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
           ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
-          ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
+          ${rep.observacoes ? `<div class="info-row freetext">📝 ${esc(rep.observacoes)}</div>` : ''}
         </div>`;
       }
 
@@ -1623,7 +1627,7 @@ const firestoreDb = getFirestore(fbApp);
           html += `<div class="client-info" style="margin-bottom:14px;">
             <div class="info-row"><strong>${esc(p.nome)}</strong></div>
             ${p.frequencia ? `<div class="info-row">${esc(p.frequencia)}</div>` : ''}
-            ${p.descricao ? `<div class="info-row">${esc(p.descricao)}</div>` : ''}
+            ${p.descricao ? `<div class="info-row freetext">${esc(p.descricao)}</div>` : ''}
             ${variantes.map(v=>`
               <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
                 <div class="info-row">⏱️ ${v.duracao ? esc(v.duracao)+' — ' : ''}${esc(v.preco)}</div>
