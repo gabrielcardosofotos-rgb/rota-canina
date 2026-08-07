@@ -171,6 +171,51 @@
   }
   .client-dogs[hidden]{display:none;}
   .client-info{padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:4px;}
+
+  /* Renewal banner */
+  .renew-banner{
+    background:var(--ochre-soft);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin:16px 0;
+  }
+  .renew-banner .btn-primary{background:var(--ochre);}
+
+  /* Month grid (client "deste mês") */
+  .month-walks-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .walk-card-compact{
+    padding:12px 14px;
+  }
+  .walk-card-compact::before{content:none;}
+  .walk-card-compact .walk-time{font-size:16px;}
+  .walk-card-compact .walk-dog{font-size:14px;}
+  .walk-card-compact .walk-client{font-size:12px;}
+
+  /* Histórico por mês (acordeão) */
+  .month-group{margin-top:6px;}
+  .month-toggle{
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:var(--surface-alt);
+    border:none;
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--ink);
+    cursor:pointer;
+    margin-bottom:8px;
+  }
+  .month-toggle .chev{transition:transform .2s ease;}
+  .month-toggle.open .chev{transform:rotate(180deg);}
+  .month-items{margin-bottom:10px;}
+
   .info-row{font-size:15px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
   .info-row:last-child{margin-bottom:0;}
   .addr-link{color:var(--pine-dark);text-decoration:underline;text-decoration-color:var(--ochre);font-weight:500;}
@@ -485,8 +530,7 @@
       <div class="brand">Rota Canina</div>
       <button class="logout-btn" id="client-logout-btn">Sair</button>
     </div>
-    <h1 id="client-title">Seu painel</h1>
-    <div class="sub">Acompanhamento do passeio</div>
+    <div class="sub" style="margin-top:2px;">Acompanhamento do passeio</div>
   </div>
   <main class="view active" id="client-content"></main>
 </div>
@@ -608,6 +652,25 @@ const firestoreDb = getFirestore(fbApp);
     return `${weekday}, ${day} ${month}`;
   }
   function timeLabel(t){ return t; }
+  function diasParaVencer(dataStr){
+    if(!dataStr) return null;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const venc = new Date(dataStr+'T00:00:00');
+    return Math.round((venc - hoje) / 86400000);
+  }
+  function monthLabel(key){
+    const [y,m] = key.split('-');
+    const d = new Date(Number(y), Number(m)-1, 1);
+    const label = d.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+  function vencimentoBadge(c){
+    const dias = diasParaVencer(c.planoVencimento);
+    if(dias === null) return '';
+    if(dias < 0) return '<span class="status-pill" style="background:#F3D9D5;color:#8A3B2E;">Vencido</span>';
+    if(dias <= 5) return `<span class="status-pill concluido">Vence em ${dias===0 ? 'hoje' : dias+'d'}</span>`;
+    return '';
+  }
   function esc(str){
     return (str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -1066,7 +1129,10 @@ const firestoreDb = getFirestore(fbApp);
               <div class="client-name">${esc(c.nome)}</div>
               <div class="client-sub">${c.telefone ? `<a class="addr-link" href="${whatsappLink(c.telefone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 ${esc(c.telefone)}</a>` : 'Sem telefone'}</div>
             </div>
-            <span class="dog-badge">${dogCount} 🐾</span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <span class="dog-badge">${dogCount} 🐾</span>
+              ${vencimentoBadge(c)}
+            </div>
           </div>
           <div class="client-dogs" hidden></div>
         </div>`;
@@ -1210,6 +1276,14 @@ const firestoreDb = getFirestore(fbApp);
       <label>Bairro</label>
       <input type="text" id="f-bairro" value="${esc(c.bairro)}">
       <div class="hint">Se reescrever o endereço, escolha de novo na lista pra manter o mapa certo</div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <label>Plano atual</label>
+        <input type="text" id="f-plano" value="${esc(c.planoNome)}" placeholder="Ex: Plano Equilíbrio - 30 min">
+        <label>Vencimento do plano</label>
+        <input type="date" id="f-vencimento" value="${esc(c.planoVencimento)}">
+      </div>
+
       <div class="sheet-actions">
         <button class="btn-primary" id="save-cliente">Salvar alterações</button>
       </div>
@@ -1232,6 +1306,8 @@ const firestoreDb = getFirestore(fbApp);
         c.bairro = el.querySelector('#f-bairro').value.trim();
         c.lat = lat ? Number(lat) : null;
         c.lon = lon ? Number(lon) : null;
+        c.planoNome = el.querySelector('#f-plano').value.trim();
+        c.planoVencimento = el.querySelector('#f-vencimento').value;
         await Clients.put(c);
         closeSheet();
         renderClientes();
@@ -1447,7 +1523,6 @@ const firestoreDb = getFirestore(fbApp);
       }
       const clientDoc = snap.docs[0];
       const client = { id: clientDoc.id, ...clientDoc.data() };
-      document.getElementById('client-title').textContent = client.nome;
 
       const [dogsSnap, walksSnap, planosSnap] = await Promise.all([
         getDocs(query(colRef('dogs'), where('clientId','==', client.id))),
@@ -1468,49 +1543,78 @@ const firestoreDb = getFirestore(fbApp);
         .filter(w=> w.status==='agendado' && w.date>=today && w.date<=monthEnd)
         .sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
       const historico = walks
-        .filter(w=> w.status==='concluido')
+        .filter(w=> w.status==='concluido' || w.status==='cancelado')
         .sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
 
       const dogNames = dogs.map(d=>esc(d.nome)).join(', ') || 'Nenhum cão cadastrado ainda';
 
+      function entryHtml(w){
+        const dg = dogMap[w.dogId];
+        if(w.status === 'cancelado'){
+          return `<div class="client-info" style="margin-bottom:12px;">
+            <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+            <div class="info-row">🚫 Passeio cancelado</div>
+          </div>`;
+        }
+        const rep = w.report || {};
+        return `<div class="client-info" style="margin-bottom:12px;">
+          <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+          <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
+          <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
+          ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
+          ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
+        </div>`;
+      }
+
       let html = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
+
+      const dias = diasParaVencer(client.planoVencimento);
+      if(dias !== null && dias <= 5){
+        const msg = dias < 0 ? 'Seu plano venceu.' : dias === 0 ? 'Seu plano vence hoje.' : `Seu plano vence em ${dias} dia${dias>1?'s':''}.`;
+        html += `<div class="renew-banner">
+          <div class="info-row">⚠️ ${msg}</div>
+          <button class="btn-primary" id="renovar-btn" style="margin-top:8px;">Renovar plano</button>
+        </div>`;
+      }
 
       html += `<h2 style="margin-top:22px;margin-bottom:10px;">Passeios deste mês</h2>`;
       if(doMes.length === 0){
         html += `<div class="empty-state"><p>Nenhum passeio agendado neste mês ainda.</p></div>`;
       } else {
+        html += `<div class="month-walks-grid">`;
         doMes.forEach(w=>{
           const dg = dogMap[w.dogId];
-          html += `<div class="walk-card" style="margin-left:0;margin-bottom:10px;">
-            <div class="walk-top">
-              <div>
-                <div class="walk-time">${w.time}</div>
-                <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
-                <div class="walk-client">${dayLabel(w.date)}</div>
-              </div>
+          html += `<div class="walk-card walk-card-compact">
+            <div class="walk-time">${w.time}</div>
+            <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+            <div class="walk-client">${dayLabel(w.date)}</div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      html += `<h2 style="margin-top:26px;margin-bottom:10px;">Histórico</h2>`;
+      if(historico.length === 0){
+        html += `<div class="empty-state"><p>Ainda não há passeios no histórico.</p></div>`;
+      } else {
+        html += entryHtml(historico[0]);
+        const rest = historico.slice(1);
+        const byMonth = {};
+        rest.forEach(w=>{
+          const key = w.date.slice(0,7);
+          (byMonth[key] = byMonth[key] || []).push(w);
+        });
+        Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
+          html += `<div class="month-group">
+            <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
+            <div class="month-items" hidden>
+              ${byMonth[key].map(w=> entryHtml(w)).join('')}
             </div>
           </div>`;
         });
       }
 
-      html += `<h2 style="margin-top:26px;margin-bottom:10px;">Histórico</h2>`;
-      if(historico.length === 0){
-        html += `<div class="empty-state"><p>Ainda não há passeios concluídos.</p></div>`;
-      } else {
-        historico.forEach(w=>{
-          const dg = dogMap[w.dogId];
-          const rep = w.report || {};
-          html += `<div class="client-info" style="margin-bottom:12px;">
-            <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
-            <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
-            <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
-            ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
-            ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
-          </div>`;
-        });
-      }
-
-      html += `<h2 style="margin-top:26px;margin-bottom:10px;">Planos disponíveis</h2>`;
+      html += `<div id="planos-section"><h2 style="margin-top:26px;margin-bottom:10px;">Planos disponíveis</h2>`;
       if(planos.length === 0){
         html += `<div class="empty-state"><p>Nenhum plano disponível no momento.</p></div>`;
       } else {
@@ -1528,7 +1632,23 @@ const firestoreDb = getFirestore(fbApp);
           </div>`;
         });
       }
+      html += `</div>`;
       content.innerHTML = html;
+
+      content.querySelectorAll('.month-toggle').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const items = btn.nextElementSibling;
+          const isHidden = items.hasAttribute('hidden');
+          if(isHidden){ items.removeAttribute('hidden'); btn.classList.add('open'); }
+          else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
+        });
+      });
+      const renovarBtn = document.getElementById('renovar-btn');
+      if(renovarBtn){
+        renovarBtn.addEventListener('click', ()=>{
+          document.getElementById('planos-section').scrollIntoView({behavior:'smooth'});
+        });
+      }
     }catch(err){
       console.error('Erro ao carregar visão do cliente:', err);
       content.innerHTML = '<div class="empty-state"><p>Não foi possível carregar seus dados agora. Tente de novo em alguns minutos.</p></div>';
