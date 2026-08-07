@@ -217,8 +217,8 @@
   .month-items{margin-bottom:10px;}
 
   /* Página do cliente: textos centralizados, exceto parágrafos livres */
-  #client-content{text-align:center;}
-  #client-content .freetext{text-align:left;}
+  #client-view-passeios, #client-view-historico{text-align:center;}
+  #client-view-passeios .freetext, #client-view-historico .freetext{text-align:left;}
 
   .info-row{font-size:15px;color:var(--ink);display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;}
   .info-row:last-child{margin-bottom:0;}
@@ -536,7 +536,18 @@
     </div>
     <div class="sub" style="margin-top:2px;">Acompanhamento do passeio</div>
   </div>
-  <main class="view active" id="client-content"></main>
+
+  <main class="view active" id="client-view-passeios"></main>
+  <main class="view" id="client-view-historico"></main>
+
+  <nav class="bottomnav">
+    <button data-cview="passeios" class="active">
+      <span class="ic">🗓️</span>Passeios
+    </button>
+    <button data-cview="historico">
+      <span class="ic">🕓</span>Histórico
+    </button>
+  </nav>
 </div>
 
 <div class="sheet-overlay" id="sheet-overlay">
@@ -789,7 +800,7 @@ const firestoreDb = getFirestore(fbApp);
     clientes: document.getElementById('view-clientes'),
     planos: document.getElementById('view-planos'),
   };
-  const navButtons = document.querySelectorAll('.bottomnav button');
+  const navButtons = document.querySelectorAll('#app .bottomnav button');
   const topbarTitle = document.getElementById('topbar-title');
   const topbarSub = document.getElementById('topbar-sub');
   let currentView = 'agenda';
@@ -1517,12 +1528,14 @@ const firestoreDb = getFirestore(fbApp);
 
   /* ---------- Visão do cliente (somente leitura) ---------- */
   async function renderClientView(email){
-    const content = document.getElementById('client-content');
-    content.innerHTML = '<div class="empty-state"><p>Carregando...</p></div>';
+    const viewPasseios = document.getElementById('client-view-passeios');
+    const viewHistorico = document.getElementById('client-view-historico');
+    viewPasseios.innerHTML = '<div class="empty-state"><p>Carregando...</p></div>';
+    viewHistorico.innerHTML = '';
     try{
       const snap = await getDocs(query(colRef('clients'), where('email','==', email)));
       if(snap.empty){
-        content.innerHTML = '<div class="empty-state"><p>Não encontramos seu cadastro. Fale com o seu passeador.</p></div>';
+        viewPasseios.innerHTML = '<div class="empty-state"><p>Não encontramos seu cadastro. Fale com o seu passeador.</p></div>';
         return;
       }
       const clientDoc = snap.docs[0];
@@ -1570,61 +1583,41 @@ const firestoreDb = getFirestore(fbApp);
         </div>`;
       }
 
-      let html = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
+      /* ---- Aba Passeios (resumo + deste mês + planos) ---- */
+      let htmlP = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
 
       const dias = diasParaVencer(client.planoVencimento);
       if(dias !== null && dias <= 5){
         const msg = dias < 0 ? 'Seu plano venceu.' : dias === 0 ? 'Seu plano vence hoje.' : `Seu plano vence em ${dias} dia${dias>1?'s':''}.`;
-        html += `<div class="renew-banner">
+        htmlP += `<div class="renew-banner">
           <div class="info-row">⚠️ ${msg}</div>
           <button class="btn-primary" id="renovar-btn" style="margin-top:8px;">Renovar plano</button>
         </div>`;
       }
 
-      html += `<h2 style="margin-top:22px;margin-bottom:10px;">Passeios deste mês</h2>`;
+      htmlP += `<h2 style="margin-top:22px;margin-bottom:10px;">Passeios deste mês</h2>`;
       if(doMes.length === 0){
-        html += `<div class="empty-state"><p>Nenhum passeio agendado neste mês ainda.</p></div>`;
+        htmlP += `<div class="empty-state"><p>Nenhum passeio agendado neste mês ainda.</p></div>`;
       } else {
-        html += `<div class="month-walks-grid">`;
+        htmlP += `<div class="month-walks-grid">`;
         doMes.forEach(w=>{
           const dg = dogMap[w.dogId];
-          html += `<div class="walk-card walk-card-compact">
+          htmlP += `<div class="walk-card walk-card-compact">
             <div class="walk-time">${w.time}</div>
             <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
             <div class="walk-client">${dayLabel(w.date)}</div>
           </div>`;
         });
-        html += `</div>`;
+        htmlP += `</div>`;
       }
 
-      html += `<h2 style="margin-top:26px;margin-bottom:10px;">Histórico</h2>`;
-      if(historico.length === 0){
-        html += `<div class="empty-state"><p>Ainda não há passeios no histórico.</p></div>`;
-      } else {
-        html += entryHtml(historico[0]);
-        const rest = historico.slice(1);
-        const byMonth = {};
-        rest.forEach(w=>{
-          const key = w.date.slice(0,7);
-          (byMonth[key] = byMonth[key] || []).push(w);
-        });
-        Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
-          html += `<div class="month-group">
-            <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
-            <div class="month-items" hidden>
-              ${byMonth[key].map(w=> entryHtml(w)).join('')}
-            </div>
-          </div>`;
-        });
-      }
-
-      html += `<div id="planos-section"><h2 style="margin-top:26px;margin-bottom:10px;">Planos disponíveis</h2>`;
+      htmlP += `<div id="planos-section"><h2 style="margin-top:26px;margin-bottom:10px;">Planos disponíveis</h2>`;
       if(planos.length === 0){
-        html += `<div class="empty-state"><p>Nenhum plano disponível no momento.</p></div>`;
+        htmlP += `<div class="empty-state"><p>Nenhum plano disponível no momento.</p></div>`;
       } else {
         planos.forEach(p=>{
           const variantes = p.variantes && p.variantes.length ? p.variantes : (p.preco ? [{duracao:'', preco:p.preco, link:p.link}] : []);
-          html += `<div class="client-info" style="margin-bottom:14px;">
+          htmlP += `<div class="client-info" style="margin-bottom:14px;">
             <div class="info-row"><strong>${esc(p.nome)}</strong></div>
             ${p.frequencia ? `<div class="info-row">${esc(p.frequencia)}</div>` : ''}
             ${p.descricao ? `<div class="info-row freetext">${esc(p.descricao)}</div>` : ''}
@@ -1636,10 +1629,40 @@ const firestoreDb = getFirestore(fbApp);
           </div>`;
         });
       }
-      html += `</div>`;
-      content.innerHTML = html;
+      htmlP += `</div>`;
+      viewPasseios.innerHTML = htmlP;
 
-      content.querySelectorAll('.month-toggle').forEach(btn=>{
+      const renovarBtn = document.getElementById('renovar-btn');
+      if(renovarBtn){
+        renovarBtn.addEventListener('click', ()=>{
+          document.getElementById('planos-section').scrollIntoView({behavior:'smooth'});
+        });
+      }
+
+      /* ---- Aba Histórico ---- */
+      let htmlH = `<h2 style="margin-top:10px;margin-bottom:10px;">Histórico</h2>`;
+      if(historico.length === 0){
+        htmlH += `<div class="empty-state"><p>Ainda não há passeios no histórico.</p></div>`;
+      } else {
+        htmlH += entryHtml(historico[0]);
+        const rest = historico.slice(1);
+        const byMonth = {};
+        rest.forEach(w=>{
+          const key = w.date.slice(0,7);
+          (byMonth[key] = byMonth[key] || []).push(w);
+        });
+        Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
+          htmlH += `<div class="month-group">
+            <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
+            <div class="month-items" hidden>
+              ${byMonth[key].map(w=> entryHtml(w)).join('')}
+            </div>
+          </div>`;
+        });
+      }
+      viewHistorico.innerHTML = htmlH;
+
+      viewHistorico.querySelectorAll('.month-toggle').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const items = btn.nextElementSibling;
           const isHidden = items.hasAttribute('hidden');
@@ -1647,15 +1670,9 @@ const firestoreDb = getFirestore(fbApp);
           else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
         });
       });
-      const renovarBtn = document.getElementById('renovar-btn');
-      if(renovarBtn){
-        renovarBtn.addEventListener('click', ()=>{
-          document.getElementById('planos-section').scrollIntoView({behavior:'smooth'});
-        });
-      }
     }catch(err){
       console.error('Erro ao carregar visão do cliente:', err);
-      content.innerHTML = '<div class="empty-state"><p>Não foi possível carregar seus dados agora. Tente de novo em alguns minutos.</p></div>';
+      viewPasseios.innerHTML = '<div class="empty-state"><p>Não foi possível carregar seus dados agora. Tente de novo em alguns minutos.</p></div>';
     }
   }
 
@@ -1718,6 +1735,19 @@ const firestoreDb = getFirestore(fbApp);
 
   document.getElementById('logout-btn').addEventListener('click', ()=> signOut(fbAuth));
   document.getElementById('client-logout-btn').addEventListener('click', ()=> signOut(fbAuth));
+
+  const clientNavButtons = document.querySelectorAll('#client-app .bottomnav button');
+  const clientViews = {
+    passeios: document.getElementById('client-view-passeios'),
+    historico: document.getElementById('client-view-historico'),
+  };
+  clientNavButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const name = btn.dataset.cview;
+      Object.entries(clientViews).forEach(([k, el])=> el.classList.toggle('active', k===name));
+      clientNavButtons.forEach(b=> b.classList.toggle('active', b.dataset.cview===name));
+    });
+  });
 
   onAuthStateChanged(fbAuth, async (user)=>{
     if(user){
