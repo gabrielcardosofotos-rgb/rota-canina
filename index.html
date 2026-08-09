@@ -1313,8 +1313,7 @@ const firestoreDb = getFirestore(fbApp);
       <button class="btn-secondary add-dog-btn">+ Adicionar cão</button>
     </div>
     <div class="client-actions">
-      <button class="btn-ghost ver-avaliacoes-btn">${temNova ? '⭐ ' : ''}Avaliações (${avaliacoes.length})</button>
-      <button class="btn-ghost ver-historico-btn">Histórico (${historicoCliente.length})</button>
+      <button class="btn-ghost ver-historico-btn">${temNova ? '⭐ ' : ''}Histórico e avaliações (${historicoCliente.length})</button>
     </div>
     <div class="client-actions">
       <button class="btn-ghost edit-client-btn">Editar cliente</button>
@@ -1322,7 +1321,6 @@ const firestoreDb = getFirestore(fbApp);
     </div>`;
     container.innerHTML = html;
 
-    container.querySelector('.ver-avaliacoes-btn').addEventListener('click', ()=> openAvaliacoesCliente(c, avaliacoes));
     container.querySelector('.ver-historico-btn').addEventListener('click', ()=> openHistoricoCliente(c, historicoCliente));
     container.querySelector('.add-dog-btn').addEventListener('click', ()=> openNovoCao(clientId, c.nome));
     container.querySelector('.edit-client-btn').addEventListener('click', ()=> openEditCliente(c));
@@ -1409,12 +1407,19 @@ const firestoreDb = getFirestore(fbApp);
         </div>`;
       }
       const rep = w.report || {};
+      const avaliacaoHtml = w.avaliacao ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
+          <div class="info-row" style="font-weight:600;">Avaliação do cliente</div>
+          <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${'★'.repeat(w.avaliacao.nota)}${'☆'.repeat(5 - w.avaliacao.nota)}</div>
+          ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
+        </div>` : '';
       return `<div class="client-info" style="margin-bottom:10px;">
         <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
         <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
         <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
         ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
         ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
+        ${avaliacaoHtml}
       </div>`;
     }
 
@@ -1448,59 +1453,14 @@ const firestoreDb = getFirestore(fbApp);
         });
       });
     });
-  }
 
-  async function openAvaliacoesCliente(c, avaliacoes){
-    const allDogs = await Dogs.all();
-    const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
-    const ordenadas = avaliacoes.slice().sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
-
-    function itemHtml(w){
-      const dg = dogMap[w.dogId];
-      const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
-      return `<div class="client-info" style="margin-bottom:10px;">
-        <div class="info-row">${dayLabel(w.date)} às ${w.time} — ${esc(dg ? dg.nome : '')}</div>
-        <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
-        ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
-      </div>`;
-    }
-
-    let html = `<h2>Avaliações de ${esc(c.nome)}</h2>`;
-    if(ordenadas.length === 0){
-      html += `<p class="hint">Nenhuma avaliação ainda.</p>`;
-    } else {
-      html += itemHtml(ordenadas[0]);
-      const rest = ordenadas.slice(1);
-      const byMonth = {};
-      rest.forEach(w=>{
-        const key = w.date.slice(0,7);
-        (byMonth[key] = byMonth[key] || []).push(w);
-      });
-      Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
-        html += `<div class="month-group">
-          <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
-          <div class="month-items" hidden>
-            ${byMonth[key].map(w=> itemHtml(w)).join('')}
-          </div>
-        </div>`;
-      });
-    }
-    openSheet(html, (el)=>{
-      el.querySelectorAll('.month-toggle').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const items = btn.nextElementSibling;
-          const isHidden = items.hasAttribute('hidden');
-          if(isHidden){ items.removeAttribute('hidden'); btn.classList.add('open'); }
-          else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
-        });
-      });
-    });
-    const naoVistas = avaliacoes.filter(w=> w.avaliacao.visto === false);
+    const naoVistas = walks.filter(w=> w.avaliacao && w.avaliacao.visto === false);
     for(const w of naoVistas){
       await Walks.put({ ...w, avaliacao: { ...w.avaliacao, visto: true } });
     }
     if(naoVistas.length){ renderClientes(); }
   }
+
 
   function openEditCliente(c){
     openSheet(`
