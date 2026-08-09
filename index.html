@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rota Canina — Painel do Passeador</title>
 <meta name="theme-color" content="#2F4B3C">
-<link rel="manifest" href='data:application/manifest+json,{"name":"Rota Canina — Painel do Passeador","short_name":"Rota Canina","start_url":".","display":"standalone","background_color":"%23EDEAE2","theme_color":"%232F4B3C","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%232F4B3C%27/%3E%3Ccircle cx=%2750%27 cy=%2758%27 r=%2718%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2730%27 cy=%2732%27 r=%278.5%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2770%27 cy=%2732%27 r=%278.5%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2718%27 cy=%2750%27 r=%277%27 fill=%27%23EDEAE2%27/%3E%3Ccircle cx=%2782%27 cy=%2750%27 r=%277%27 fill=%27%23EDEAE2%27/%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -788,8 +790,10 @@ const firestoreDb = getFirestore(fbApp);
 
   /* ---------- GPS ao vivo durante o passeio ---------- */
   let wakeLock = null;
-  let trackingInterval = null;
+  let trackingWatchId = null;
   let trackingWalkId = null;
+  let trackingLastWrite = 0;
+  let trackingHeartbeat = null;
   async function requestWakeLock(){
     try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
     catch(e){ console.warn('Wake Lock não disponível:', e); }
@@ -800,31 +804,49 @@ const firestoreDb = getFirestore(fbApp);
   function getPosition(){
     return new Promise((resolve, reject)=>{
       if(!navigator.geolocation){ reject(new Error('Geolocalização não suportada')); return; }
-      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:true, timeout:15000 });
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
     });
+  }
+  async function enviarLocalizacao(pos){
+    trackingLastWrite = Date.now();
+    try{
+      await updateDoc(docRef('walks', trackingWalkId), {
+        location: { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: trackingLastWrite }
+      });
+    }catch(err){ console.error('Erro ao salvar localização:', err); }
   }
   async function iniciarRastreio(walkId){
     await requestWakeLock();
     trackingWalkId = walkId;
-    async function tick(){
-      try{
-        const pos = await getPosition();
-        await updateDoc(docRef('walks', walkId), {
-          location: { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: Date.now() }
-        });
-      }catch(err){ console.error('Erro ao obter localização:', err); }
-    }
-    await tick();
-    if(trackingInterval) clearInterval(trackingInterval);
-    trackingInterval = setInterval(tick, 60000);
+    trackingLastWrite = 0;
+    // watchPosition: o navegador chama de novo sempre que o GPS entrega uma
+    // posição nova (mais confiável que um timer, que pode ser pausado pelo
+    // celular quando o site fica em segundo plano por um tempo).
+    trackingWatchId = navigator.geolocation.watchPosition(
+      (pos)=>{ if(Date.now() - trackingLastWrite >= 45000) enviarLocalizacao(pos); },
+      (err)=> console.error('Erro de geolocalização:', err),
+      { enableHighAccuracy:true, maximumAge:0, timeout:20000 }
+    );
+    // Reforço: se o GPS não entregar nada novo (parado, ou throttling do
+    // navegador), tenta puxar uma leitura manual a cada 1 min mesmo assim.
+    if(trackingHeartbeat) clearInterval(trackingHeartbeat);
+    trackingHeartbeat = setInterval(async ()=>{
+      if(Date.now() - trackingLastWrite >= 55000){
+        try{ const pos = await getPosition(); await enviarLocalizacao(pos); }
+        catch(err){ console.error('Erro no heartbeat de localização:', err); }
+      }
+    }, 60000);
+    const primeira = await getPosition();
+    await enviarLocalizacao(primeira);
   }
   function pararRastreio(){
-    if(trackingInterval){ clearInterval(trackingInterval); trackingInterval = null; }
+    if(trackingWatchId !== null){ navigator.geolocation.clearWatch(trackingWatchId); trackingWatchId = null; }
+    if(trackingHeartbeat){ clearInterval(trackingHeartbeat); trackingHeartbeat = null; }
     trackingWalkId = null;
     releaseWakeLock();
   }
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState === 'visible' && trackingInterval){
+    if(document.visibilityState === 'visible' && trackingWatchId !== null){
       requestWakeLock();
     }
   });
@@ -2150,14 +2172,10 @@ const firestoreDb = getFirestore(fbApp);
   });
 
   if('serviceWorker' in navigator){
-    // Registration is a no-op inside this preview sandbox; it activates once
-    // the file is hosted for real (e.g. GitHub Pages), enabling offline use.
+    // Registro real do sw.js. Enquanto testado como artefato de preview,
+    // pode falhar silenciosamente; funciona quando hospedado (GitHub Pages).
     window.addEventListener('load', ()=>{
-      try{
-        const swCode = `self.addEventListener('fetch', ()=>{});`;
-        const blob = new Blob([swCode], {type:'application/javascript'});
-        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
-      }catch(e){}
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
     });
   }
 
