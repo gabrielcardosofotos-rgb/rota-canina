@@ -400,6 +400,26 @@
     font-family:inherit;
   }
   .sheet textarea{resize:vertical;min-height:64px;}
+  .rate-block{text-align:left;}
+  .rate-block label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:0 0 6px 0;
+  }
+  .rate-block select, .rate-block textarea{
+    width:100%;
+    border:1px solid var(--line-strong);
+    background:var(--surface);
+    border-radius:10px;
+    padding:12px;
+    font-size:15px;
+    color:var(--ink);
+    font-family:inherit;
+    margin-bottom:8px;
+  }
+  .rate-block textarea{resize:vertical;min-height:56px;}
   .walk-photo{width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin:8px 0;display:block;}
   .checkbox-row{
     display:flex !important;
@@ -504,7 +524,10 @@
   <div class="topbar">
     <div class="topbar-row">
       <div class="brand">Rota Canina</div>
-      <button class="logout-btn" id="logout-btn">Sair</button>
+      <div style="display:flex;gap:14px;align-items:center;">
+        <button class="logout-btn" id="config-btn">⚙️ Config</button>
+        <button class="logout-btn" id="logout-btn">Sair</button>
+      </div>
     </div>
     <h1 id="topbar-title">Agenda</h1>
     <div class="sub" id="topbar-sub"></div>
@@ -561,7 +584,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb_rhPbFxSt46uU9JXeEc-GMfVdTzCK6U",
@@ -611,6 +634,16 @@ const firestoreDb = getFirestore(fbApp);
     all: async ()=>{ const snap = await getDocs(colRef('planos')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
     del: (id)=> deleteDoc(docRef('planos', id)),
   };
+  const Config = {
+    get: async ()=>{
+      const snap = await getDoc(docRef('config', 'settings'));
+      return snap.exists() ? snap.data() : {};
+    },
+    save: (data)=> setDoc(docRef('config', 'settings'), data, {merge:true}),
+  };
+  function submitAvaliacao(walkId, avaliacao){
+    return updateDoc(docRef('walks', walkId), { avaliacao });
+  }
 
   /* ---------- Fotos (ficam só no celular; Storage na nuvem ainda não está ativo) ---------- */
   const PHOTO_DB_NAME = 'trilha_photos_db';
@@ -835,6 +868,30 @@ const firestoreDb = getFirestore(fbApp);
     else openNovoPlano();
   });
 
+  /* ---------- Configurações ---------- */
+  document.getElementById('config-btn').addEventListener('click', openConfigSheet);
+  async function openConfigSheet(){
+    const cfg = await Config.get().catch(()=> ({}));
+    openSheet(`
+      <h2>Configurações</h2>
+      <label>Seu WhatsApp (com DDD)</label>
+      <input type="tel" id="f-cfg-whats" value="${esc(cfg.whatsapp)}" placeholder="(51) 9....-....">
+      <label class="checkbox-row" style="margin-top:14px;"><input type="checkbox" id="f-cfg-mostrar" ${cfg.mostrarWhatsapp ? 'checked' : ''}> Mostrar botão de WhatsApp pro cliente</label>
+      <div class="hint">Quando ativo, aparece um botão "WhatsApp Passeador" no painel do cliente, antes dos planos</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-cfg">Salvar</button>
+      </div>
+    `, (el)=>{
+      el.querySelector('#save-cfg').addEventListener('click', async ()=>{
+        await Config.save({
+          whatsapp: el.querySelector('#f-cfg-whats').value.trim(),
+          mostrarWhatsapp: el.querySelector('#f-cfg-mostrar').checked,
+        });
+        closeSheet();
+      });
+    });
+  }
+
   /* ================= AGENDA ================= */
   async function renderAgenda(){
     const [walks, clients, dogs] = await Promise.all([Walks.all(), Clients.all(), Dogs.all()]);
@@ -918,6 +975,7 @@ const firestoreDb = getFirestore(fbApp);
 
       <label>Horário</label>
       <input type="time" id="f-hora" value="09:00">
+      <div id="conflito-info"></div>
 
       <label class="checkbox-row"><input type="checkbox" id="f-repetir"> Repetir semanalmente</label>
       <div id="f-semanas-wrap" style="display:none;">
@@ -951,6 +1009,25 @@ const firestoreDb = getFirestore(fbApp);
       chkRepetir.addEventListener('change', ()=>{
         semanasWrap.style.display = chkRepetir.checked ? 'block' : 'none';
       });
+
+      async function checkConflito(){
+        const date = el.querySelector('#f-data').value;
+        const time = el.querySelector('#f-hora').value;
+        const infoEl = el.querySelector('#conflito-info');
+        if(!date || !time){ infoEl.innerHTML = ''; return; }
+        const [allWalks, allDogs] = await Promise.all([Walks.all(), Dogs.all()]);
+        const existentes = allWalks.filter(w=> w.date===date && w.time===time && w.status==='agendado');
+        if(existentes.length === 0){ infoEl.innerHTML = ''; return; }
+        const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
+        const linhas = existentes.map(w=>{
+          const dg = dogMap[w.dogId];
+          const grupo = dg && dg.aceitaGrupo === false ? 'só individual' : 'aceita grupo';
+          return `${dg ? esc(dg.nome) : '?'} (${grupo})`;
+        }).join(', ');
+        infoEl.innerHTML = `<div class="hint">⚠️ Já tem passeio nesse horário: ${linhas}</div>`;
+      }
+      el.querySelector('#f-data').addEventListener('change', checkConflito);
+      el.querySelector('#f-hora').addEventListener('change', checkConflito);
 
       el.querySelector('#save-passeio').addEventListener('click', async ()=>{
         const clientId = selCliente.value;
@@ -1542,10 +1619,11 @@ const firestoreDb = getFirestore(fbApp);
       const clientDoc = snap.docs[0];
       const client = { id: clientDoc.id, ...clientDoc.data() };
 
-      const [dogsSnap, walksSnap, planosSnap] = await Promise.all([
+      const [dogsSnap, walksSnap, planosSnap, config] = await Promise.all([
         getDocs(query(colRef('dogs'), where('clientId','==', client.id))),
         getDocs(query(colRef('walks'), where('clientId','==', client.id))),
-        getDocs(colRef('planos'))
+        getDocs(colRef('planos')),
+        Config.get().catch(()=> ({}))
       ]);
       const dogs = dogsSnap.docs.map(d=>({id:d.id, ...d.data()}));
       const walks = walksSnap.docs.map(d=>({id:d.id, ...d.data()}));
@@ -1566,6 +1644,28 @@ const firestoreDb = getFirestore(fbApp);
 
       const dogNames = dogs.map(d=>esc(d.nome)).join(', ') || 'Nenhum cão cadastrado ainda';
 
+      function ratingHtml(w){
+        if(w.avaliacao){
+          const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
+          return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+            <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
+            ${w.avaliacao.comentario ? `<div class="info-row freetext">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
+          </div>`;
+        }
+        return `<div class="rate-block" data-walk-id="${w.id}" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+          <label>Avaliar este passeio</label>
+          <select class="rate-nota">
+            <option value="5">★★★★★</option>
+            <option value="4">★★★★☆</option>
+            <option value="3">★★★☆☆</option>
+            <option value="2">★★☆☆☆</option>
+            <option value="1">★☆☆☆☆</option>
+          </select>
+          <textarea class="rate-comment freetext" placeholder="Comentário (opcional)"></textarea>
+          <button class="btn-secondary rate-submit" style="margin-top:8px;">Enviar avaliação</button>
+        </div>`;
+      }
+
       function entryHtml(w){
         const dg = dogMap[w.dogId];
         if(w.status === 'cancelado'){
@@ -1581,6 +1681,7 @@ const firestoreDb = getFirestore(fbApp);
           <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
           ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
           ${rep.observacoes ? `<div class="info-row freetext">📝 ${esc(rep.observacoes)}</div>` : ''}
+          ${ratingHtml(w)}
         </div>`;
       }
 
@@ -1612,7 +1713,11 @@ const firestoreDb = getFirestore(fbApp);
         htmlP += `</div>`;
       }
 
-      htmlP += `<div id="planos-section"><h2 style="margin-top:26px;margin-bottom:10px;">Planos disponíveis</h2>`;
+      htmlP += `<div id="planos-section">`;
+      if(config.mostrarWhatsapp && config.whatsapp){
+        htmlP += `<a class="btn-primary" style="display:block;text-decoration:none;margin:20px 0;" href="${whatsappLink(config.whatsapp)}" target="_blank" rel="noopener">WhatsApp Passeador</a>`;
+      }
+      htmlP += `<h2 style="margin-top:6px;margin-bottom:10px;">Planos disponíveis</h2>`;
       if(planos.length === 0){
         htmlP += `<div class="empty-state"><p>Nenhum plano disponível no momento.</p></div>`;
       } else {
@@ -1669,6 +1774,25 @@ const firestoreDb = getFirestore(fbApp);
           const isHidden = items.hasAttribute('hidden');
           if(isHidden){ items.removeAttribute('hidden'); btn.classList.add('open'); }
           else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
+        });
+      });
+
+      viewHistorico.querySelectorAll('.rate-submit').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const block = btn.closest('.rate-block');
+          const walkId = block.dataset.walkId;
+          const nota = Number(block.querySelector('.rate-nota').value);
+          const comentario = block.querySelector('.rate-comment').value.trim();
+          btn.disabled = true;
+          btn.textContent = 'Enviando...';
+          try{
+            await submitAvaliacao(walkId, { nota, comentario, criadoEm: Date.now() });
+            renderClientView(email);
+          }catch(err){
+            console.error('Erro ao enviar avaliação:', err);
+            btn.disabled = false;
+            btn.textContent = 'Enviar avaliação';
+          }
         });
       });
     }catch(err){
