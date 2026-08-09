@@ -1198,6 +1198,9 @@ const firestoreDb = getFirestore(fbApp);
       return;
     }
     const allDogs = await Dogs.all();
+    const allWalks = await Walks.all();
+    const unseenByClient = new Set();
+    allWalks.forEach(w=>{ if(w.avaliacao && w.avaliacao.visto === false) unseenByClient.add(w.clientId); });
     const byBairro = {};
     clients.forEach(c=>{
       const key = (c.bairro || '').trim() || 'Sem bairro definido';
@@ -1225,6 +1228,7 @@ const firestoreDb = getFirestore(fbApp);
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
               <span class="dog-badge">${dogCount} 🐾</span>
               ${vencimentoBadge(c)}
+              ${unseenByClient.has(c.id) ? '<span class="status-pill concluido">⭐ Nova avaliação</span>' : ''}
             </div>
           </div>
           <div class="client-dogs" hidden></div>
@@ -1249,8 +1253,10 @@ const firestoreDb = getFirestore(fbApp);
   }
 
   async function renderClientDogs(clientId, container){
-    const [client, dogs] = await Promise.all([Clients.all(), Dogs.byClient(clientId)]);
+    const [client, dogs, allWalks] = await Promise.all([Clients.all(), Dogs.byClient(clientId), Walks.all()]);
     const c = client.find(x=>x.id===clientId);
+    const avaliacoes = allWalks.filter(w=> w.clientId===clientId && w.avaliacao);
+    const temNova = avaliacoes.some(w=> w.avaliacao.visto === false);
     let html = `<div class="client-info">
       <div class="info-row">📍 ${c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
       <div class="info-row">✉️ ${c.email ? esc(c.email) : '<span class="hint">E-mail não informado</span>'}</div>
@@ -1274,11 +1280,15 @@ const firestoreDb = getFirestore(fbApp);
       <button class="btn-secondary add-dog-btn">+ Adicionar cão</button>
     </div>
     <div class="client-actions">
+      <button class="btn-ghost ver-avaliacoes-btn">${temNova ? '⭐ ' : ''}Avaliações (${avaliacoes.length})</button>
+    </div>
+    <div class="client-actions">
       <button class="btn-ghost edit-client-btn">Editar cliente</button>
       <button class="btn-ghost danger del-client-btn">Excluir cliente</button>
     </div>`;
     container.innerHTML = html;
 
+    container.querySelector('.ver-avaliacoes-btn').addEventListener('click', ()=> openAvaliacoesCliente(c, avaliacoes));
     container.querySelector('.add-dog-btn').addEventListener('click', ()=> openNovoCao(clientId, c.nome));
     container.querySelector('.edit-client-btn').addEventListener('click', ()=> openEditCliente(c));
     container.querySelector('.del-client-btn').addEventListener('click', async ()=>{
@@ -1348,6 +1358,32 @@ const firestoreDb = getFirestore(fbApp);
         openNovoCao(id, nome, true);
       });
     });
+  }
+
+  async function openAvaliacoesCliente(c, avaliacoes){
+    const allDogs = await Dogs.all();
+    const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
+    const ordenadas = avaliacoes.slice().sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+    let html = `<h2>Avaliações de ${esc(c.nome)}</h2>`;
+    if(ordenadas.length === 0){
+      html += `<p class="hint">Nenhuma avaliação ainda.</p>`;
+    } else {
+      ordenadas.forEach(w=>{
+        const dg = dogMap[w.dogId];
+        const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
+        html += `<div class="client-info" style="margin-bottom:10px;">
+          <div class="info-row">${dayLabel(w.date)} às ${w.time} — ${esc(dg ? dg.nome : '')}</div>
+          <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
+          ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
+        </div>`;
+      });
+    }
+    openSheet(html);
+    const naoVistas = avaliacoes.filter(w=> w.avaliacao.visto === false);
+    for(const w of naoVistas){
+      await Walks.put({ ...w, avaliacao: { ...w.avaliacao, visto: true } });
+    }
+    if(naoVistas.length){ renderClientes(); }
   }
 
   function openEditCliente(c){
@@ -1786,7 +1822,7 @@ const firestoreDb = getFirestore(fbApp);
           btn.disabled = true;
           btn.textContent = 'Enviando...';
           try{
-            await submitAvaliacao(walkId, { nota, comentario, criadoEm: Date.now() });
+            await submitAvaliacao(walkId, { nota, comentario, criadoEm: Date.now(), visto: false });
             renderClientView(email);
           }catch(err){
             console.error('Erro ao enviar avaliação:', err);
