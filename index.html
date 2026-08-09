@@ -180,6 +180,13 @@
     margin:16px 0;
   }
   .renew-banner .btn-primary{background:var(--ochre);}
+  #live-map{
+    width:100%;
+    height:220px;
+    border-radius:12px;
+    margin-top:10px;
+    background:var(--surface-alt);
+  }
 
   /* Month grid (client "deste mês") */
   .month-walks-grid{
@@ -602,7 +609,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAb_rhPbFxSt46uU9JXeEc-GMfVdTzCK6U",
@@ -778,6 +785,76 @@ const firestoreDb = getFirestore(fbApp);
     }
     return placesLibPromise;
   }
+
+  /* ---------- GPS ao vivo durante o passeio ---------- */
+  let wakeLock = null;
+  let trackingInterval = null;
+  let trackingWalkId = null;
+  async function requestWakeLock(){
+    try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+    catch(e){ console.warn('Wake Lock não disponível:', e); }
+  }
+  function releaseWakeLock(){
+    if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+  }
+  function getPosition(){
+    return new Promise((resolve, reject)=>{
+      if(!navigator.geolocation){ reject(new Error('Geolocalização não suportada')); return; }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:true, timeout:15000 });
+    });
+  }
+  async function iniciarRastreio(walkId){
+    await requestWakeLock();
+    trackingWalkId = walkId;
+    async function tick(){
+      try{
+        const pos = await getPosition();
+        await updateDoc(docRef('walks', walkId), {
+          location: { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: Date.now() }
+        });
+      }catch(err){ console.error('Erro ao obter localização:', err); }
+    }
+    await tick();
+    if(trackingInterval) clearInterval(trackingInterval);
+    trackingInterval = setInterval(tick, 60000);
+  }
+  function pararRastreio(){
+    if(trackingInterval){ clearInterval(trackingInterval); trackingInterval = null; }
+    trackingWalkId = null;
+    releaseWakeLock();
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible' && trackingInterval){
+      requestWakeLock();
+    }
+  });
+  let liveMapUnsubscribe = null;
+  async function initLiveMap(w){
+    if(liveMapUnsubscribe){ liveMapUnsubscribe(); liveMapUnsubscribe = null; }
+    const mapEl = document.getElementById('live-map');
+    if(!mapEl || !w.location) return;
+    await loadGoogleMaps();
+    const center = { lat: w.location.lat, lng: w.location.lng };
+    const map = new google.maps.Map(mapEl, { center, zoom: 16, disableDefaultUI: true, zoomControl: true });
+    const marker = new google.maps.Marker({ position: center, map });
+    updateLiveMapTimestamp(w.location.updatedAt);
+    liveMapUnsubscribe = onSnapshot(docRef('walks', w.id), (snap)=>{
+      const data = snap.data();
+      if(data && data.location){
+        const pos = { lat: data.location.lat, lng: data.location.lng };
+        marker.setPosition(pos);
+        map.panTo(pos);
+        updateLiveMapTimestamp(data.location.updatedAt);
+      }
+      if(data && data.status !== 'em_andamento'){
+        if(liveMapUnsubscribe){ liveMapUnsubscribe(); liveMapUnsubscribe = null; }
+      }
+    });
+  }
+  function updateLiveMapTimestamp(ts){
+    const el = document.getElementById('live-map-updated');
+    if(el) el.textContent = `Atualizado às ${new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+  }
   function setupAddressAutocomplete(input, list, latInput, lonInput, bairroInput){
     let sessionToken = null;
     const runSearch = debounce(async ()=>{
@@ -941,7 +1018,7 @@ const firestoreDb = getFirestore(fbApp);
         const dog = dogMap[w.dogId];
         const client = clientMap[w.clientId];
         const statusClass = w.status === 'concluido' ? 'status-concluido' : (w.status === 'cancelado' ? 'status-cancelado' : '');
-        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : '<span class="status-pill">Agendado</span>';
+        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : w.status === 'em_andamento' ? '<span class="status-pill concluido">📍 Em andamento</span>' : '<span class="status-pill">Agendado</span>';
         html += `<li class="walk-card ${statusClass}" data-id="${w.id}">
           <div class="walk-top">
             <div>
@@ -1106,6 +1183,13 @@ const firestoreDb = getFirestore(fbApp);
         </div>
       ` : '';
 
+      const emAndamentoHtml = w.status === 'em_andamento' ? `
+        <div class="renew-banner">
+          <div class="info-row">📍 Rastreio ativo — mantenha este app aberto durante o passeio</div>
+          ${w.location ? `<div class="info-row hint">Última localização enviada às ${new Date(w.location.updatedAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+        </div>
+      ` : '';
+
       openSheet(`
         <h2>${dayLabel(w.date)} às ${w.time}</h2>
         <p class="hint">${esc(dg ? dg.nome : 'Cão removido')} · ${esc(c ? c.nome : 'Cliente removido')}</p>
@@ -1113,8 +1197,10 @@ const firestoreDb = getFirestore(fbApp);
           <div class="info-row">📍 ${c && c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
           ${c && c.telefone ? `<div class="info-row">💬 <a class="addr-link" href="${whatsappLink(c.telefone)}" target="_blank" rel="noopener">${esc(c.telefone)}</a></div>` : ''}
         </div>
+        ${emAndamentoHtml}
         ${reportHtml}
         <div class="sheet-actions" style="flex-direction:column;">
+          ${w.status === 'agendado' ? '<button class="btn-secondary" id="iniciar-btn">📍 Iniciar passeio (ativar GPS)</button>' : ''}
           ${w.status !== 'concluido' ? '<button class="btn-primary" id="mark-done">Finalizar passeio</button>' : '<button class="btn-secondary" id="edit-report">Editar registro</button>'}
           ${w.status !== 'cancelado' ? '<button class="btn-secondary" id="cancel-walk">Cancelar passeio</button>' : ''}
           <button class="btn-ghost danger" id="del-walk">Excluir passeio</button>
@@ -1128,12 +1214,30 @@ const firestoreDb = getFirestore(fbApp);
             }
           }).catch(()=>{});
         }
+        const iniciarBtn = el.querySelector('#iniciar-btn');
+        if(iniciarBtn) iniciarBtn.addEventListener('click', async ()=>{
+          iniciarBtn.disabled = true;
+          iniciarBtn.textContent = 'Ativando GPS...';
+          try{
+            w.status = 'em_andamento';
+            await Walks.put(w);
+            await iniciarRastreio(w.id);
+            closeSheet();
+            renderAgenda();
+          }catch(err){
+            console.error('Erro ao iniciar rastreio:', err);
+            alert('Não foi possível ativar o GPS. Verifique se você deu permissão de localização pro navegador.');
+            iniciarBtn.disabled = false;
+            iniciarBtn.textContent = '📍 Iniciar passeio (ativar GPS)';
+          }
+        });
         const doneBtn = el.querySelector('#mark-done');
-        if(doneBtn) doneBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
+        if(doneBtn) doneBtn.addEventListener('click', ()=>{ pararRastreio(); openFinalizarPasseio(w, dg, c); });
         const editBtn = el.querySelector('#edit-report');
         if(editBtn) editBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
         const cancelBtn = el.querySelector('#cancel-walk');
         if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
+          pararRastreio();
           w.status = 'cancelado'; w.vistoPeloCliente = false; await Walks.put(w); closeSheet(); renderAgenda();
         });
         el.querySelector('#del-walk').addEventListener('click', async ()=>{
@@ -1807,6 +1911,17 @@ const firestoreDb = getFirestore(fbApp);
       /* ---- Aba Passeios (resumo + deste mês + planos) ---- */
       let htmlP = `<div class="client-info"><div class="info-row">🐾 ${dogNames}</div></div>`;
 
+      const emAndamento = walks.find(w=> w.status === 'em_andamento');
+      if(emAndamento){
+        const dg = dogMap[emAndamento.dogId];
+        htmlP += `<div class="renew-banner" style="background:var(--pine);color:#fff;">
+          <div class="info-row" style="color:#fff;">📍 Passeio em andamento agora — ${esc(dg ? dg.nome : '')}</div>
+          ${emAndamento.location
+            ? `<div id="live-map"></div><div class="info-row hint" id="live-map-updated" style="color:#EDEAE2;"></div>`
+            : `<div class="info-row hint" style="color:#EDEAE2;">Aguardando a primeira localização...</div>`}
+        </div>`;
+      }
+
       const dias = diasParaVencer(client.planoVencimento);
       if(dias !== null && dias <= 5){
         const msg = dias < 0 ? 'Seu plano venceu.' : dias === 0 ? 'Seu plano vence hoje.' : `Seu plano vence em ${dias} dia${dias>1?'s':''}.`;
@@ -1862,6 +1977,10 @@ const firestoreDb = getFirestore(fbApp);
         renovarBtn.addEventListener('click', ()=>{
           document.getElementById('planos-section').scrollIntoView({behavior:'smooth'});
         });
+      }
+
+      if(emAndamento){
+        initLiveMap(emAndamento).catch(err=> console.error('Erro ao iniciar mapa ao vivo:', err));
       }
 
       /* ---- Aba Histórico ---- */
