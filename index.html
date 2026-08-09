@@ -984,6 +984,7 @@ const firestoreDb = getFirestore(fbApp);
       <h2>Novo passeio</h2>
       <label>Cliente</label>
       <select id="f-cliente"><option value="">Selecione</option>${options}</select>
+      <div id="cliente-bairro-info"></div>
 
       <label>Cão</label>
       <select id="f-cao" disabled><option value="">Selecione o cliente primeiro</option></select>
@@ -1013,7 +1014,16 @@ const firestoreDb = getFirestore(fbApp);
 
       selCliente.addEventListener('change', async ()=>{
         const cid = selCliente.value;
-        if(!cid){ selCao.innerHTML = '<option value="">Selecione o cliente primeiro</option>'; selCao.disabled = true; return; }
+        const bairroInfo = el.querySelector('#cliente-bairro-info');
+        if(!cid){
+          selCao.innerHTML = '<option value="">Selecione o cliente primeiro</option>'; selCao.disabled = true;
+          bairroInfo.innerHTML = '';
+          return;
+        }
+        const clienteSel = clients.find(c=>c.id===cid);
+        bairroInfo.innerHTML = clienteSel && clienteSel.bairro
+          ? `<div class="hint">📍 Bairro: ${esc(clienteSel.bairro)}</div>`
+          : `<div class="hint">Bairro não informado pra este cliente</div>`;
         const dogs = await Dogs.byClient(cid);
         if(dogs.length === 0){
           selCao.innerHTML = '<option value="">Este cliente não tem cão cadastrado</option>';
@@ -1033,14 +1043,17 @@ const firestoreDb = getFirestore(fbApp);
         const time = el.querySelector('#f-hora').value;
         const infoEl = el.querySelector('#conflito-info');
         if(!date || !time){ infoEl.innerHTML = ''; return; }
-        const [allWalks, allDogs] = await Promise.all([Walks.all(), Dogs.all()]);
+        const [allWalks, allDogs, allClients] = await Promise.all([Walks.all(), Dogs.all(), Clients.all()]);
         const existentes = allWalks.filter(w=> w.date===date && w.time===time && w.status==='agendado');
         if(existentes.length === 0){ infoEl.innerHTML = ''; return; }
         const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
+        const clientMap = Object.fromEntries(allClients.map(c=>[c.id,c]));
         const linhas = existentes.map(w=>{
           const dg = dogMap[w.dogId];
+          const cl = clientMap[w.clientId];
           const grupo = dg && dg.aceitaGrupo === false ? 'só individual' : 'aceita grupo';
-          return `${dg ? esc(dg.nome) : '?'} (${grupo})`;
+          const bairro = cl && cl.bairro ? cl.bairro : 'bairro não informado';
+          return `${dg ? esc(dg.nome) : '?'} (${grupo}, bairro: ${esc(bairro)})`;
         }).join(', ');
         infoEl.innerHTML = `<div class="hint">⚠️ Já tem passeio nesse horário: ${linhas}</div>`;
       }
