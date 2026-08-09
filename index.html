@@ -322,9 +322,26 @@
     font-size:12px;
     color:var(--ink-soft);
     cursor:pointer;
+    position:relative;
   }
   .bottomnav button .ic{font-size:19px;}
   .bottomnav button.active{color:var(--pine-dark);font-weight:600;}
+  .nav-badge{
+    position:absolute;
+    top:2px;
+    right:26%;
+    background:var(--danger);
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    min-width:16px;
+    height:16px;
+    line-height:16px;
+    border-radius:50%;
+    text-align:center;
+    padding:0 3px;
+  }
+  .nav-badge[hidden]{display:none;}
   .fab{
     position:absolute;
     right:20px;
@@ -570,6 +587,7 @@
     </button>
     <button data-cview="historico">
       <span class="ic">🕓</span>Histórico
+      <span class="nav-badge" id="historico-badge" hidden>0</span>
     </button>
   </nav>
 </div>
@@ -1103,7 +1121,7 @@ const firestoreDb = getFirestore(fbApp);
         if(editBtn) editBtn.addEventListener('click', ()=> openFinalizarPasseio(w, dg, c));
         const cancelBtn = el.querySelector('#cancel-walk');
         if(cancelBtn) cancelBtn.addEventListener('click', async ()=>{
-          w.status = 'cancelado'; await Walks.put(w); closeSheet(); renderAgenda();
+          w.status = 'cancelado'; w.vistoPeloCliente = false; await Walks.put(w); closeSheet(); renderAgenda();
         });
         el.querySelector('#del-walk').addEventListener('click', async ()=>{
           if(confirm('Excluir este passeio?')){
@@ -1169,6 +1187,7 @@ const firestoreDb = getFirestore(fbApp);
         const file = fileInput.files[0];
         w.status = 'concluido';
         w.finalizedAt = Date.now();
+        w.vistoPeloCliente = false;
         w.report = {
           xixi: el.querySelector('#f-xixi').checked,
           coco: el.querySelector('#f-coco').checked,
@@ -1364,21 +1383,47 @@ const firestoreDb = getFirestore(fbApp);
     const allDogs = await Dogs.all();
     const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
     const ordenadas = avaliacoes.slice().sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+
+    function itemHtml(w){
+      const dg = dogMap[w.dogId];
+      const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
+      return `<div class="client-info" style="margin-bottom:10px;">
+        <div class="info-row">${dayLabel(w.date)} às ${w.time} — ${esc(dg ? dg.nome : '')}</div>
+        <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
+        ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
+      </div>`;
+    }
+
     let html = `<h2>Avaliações de ${esc(c.nome)}</h2>`;
     if(ordenadas.length === 0){
       html += `<p class="hint">Nenhuma avaliação ainda.</p>`;
     } else {
-      ordenadas.forEach(w=>{
-        const dg = dogMap[w.dogId];
-        const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
-        html += `<div class="client-info" style="margin-bottom:10px;">
-          <div class="info-row">${dayLabel(w.date)} às ${w.time} — ${esc(dg ? dg.nome : '')}</div>
-          <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
-          ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
+      html += itemHtml(ordenadas[0]);
+      const rest = ordenadas.slice(1);
+      const byMonth = {};
+      rest.forEach(w=>{
+        const key = w.date.slice(0,7);
+        (byMonth[key] = byMonth[key] || []).push(w);
+      });
+      Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
+        html += `<div class="month-group">
+          <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
+          <div class="month-items" hidden>
+            ${byMonth[key].map(w=> itemHtml(w)).join('')}
+          </div>
         </div>`;
       });
     }
-    openSheet(html);
+    openSheet(html, (el)=>{
+      el.querySelectorAll('.month-toggle').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const items = btn.nextElementSibling;
+          const isHidden = items.hasAttribute('hidden');
+          if(isHidden){ items.removeAttribute('hidden'); btn.classList.add('open'); }
+          else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
+        });
+      });
+    });
     const naoVistas = avaliacoes.filter(w=> w.avaliacao.visto === false);
     for(const w of naoVistas){
       await Walks.put({ ...w, avaliacao: { ...w.avaliacao, visto: true } });
@@ -1678,12 +1723,19 @@ const firestoreDb = getFirestore(fbApp);
         .filter(w=> w.status==='concluido' || w.status==='cancelado')
         .sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
 
+      const unseenWalks = historico.filter(w=> w.vistoPeloCliente === false);
+      unseenHistoricoIds = unseenWalks.map(w=>w.id);
+      const historicoBadge = document.getElementById('historico-badge');
+      if(unseenWalks.length > 0){ historicoBadge.textContent = String(unseenWalks.length); historicoBadge.hidden = false; }
+      else{ historicoBadge.hidden = true; }
+
       const dogNames = dogs.map(d=>esc(d.nome)).join(', ') || 'Nenhum cão cadastrado ainda';
 
       function ratingHtml(w){
         if(w.avaliacao){
           const stars = '★'.repeat(w.avaliacao.nota) + '☆'.repeat(5 - w.avaliacao.nota);
           return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+            <div class="info-row" style="font-weight:600;">Sua avaliação</div>
             <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${stars}</div>
             ${w.avaliacao.comentario ? `<div class="info-row freetext">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
           </div>`;
@@ -1848,6 +1900,7 @@ const firestoreDb = getFirestore(fbApp);
   const authToggle = document.getElementById('auth-toggle');
   const authTitle = document.getElementById('auth-title');
   let isSignup = false;
+  let unseenHistoricoIds = [];
   let dbReady = false;
 
   function traduzErroFirebase(code){
@@ -1907,6 +1960,12 @@ const firestoreDb = getFirestore(fbApp);
       const name = btn.dataset.cview;
       Object.entries(clientViews).forEach(([k, el])=> el.classList.toggle('active', k===name));
       clientNavButtons.forEach(b=> b.classList.toggle('active', b.dataset.cview===name));
+      if(name === 'historico' && unseenHistoricoIds.length){
+        const ids = unseenHistoricoIds.slice();
+        unseenHistoricoIds = [];
+        document.getElementById('historico-badge').hidden = true;
+        ids.forEach(id=> updateDoc(docRef('walks', id), { vistoPeloCliente: true }).catch(()=>{}));
+      }
     });
   });
 
