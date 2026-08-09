@@ -1289,6 +1289,7 @@ const firestoreDb = getFirestore(fbApp);
     const c = client.find(x=>x.id===clientId);
     const avaliacoes = allWalks.filter(w=> w.clientId===clientId && w.avaliacao);
     const temNova = avaliacoes.some(w=> w.avaliacao.visto === false);
+    const historicoCliente = allWalks.filter(w=> w.clientId===clientId && (w.status==='concluido' || w.status==='cancelado'));
     let html = `<div class="client-info">
       <div class="info-row">📍 ${c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
       <div class="info-row">✉️ ${c.email ? esc(c.email) : '<span class="hint">E-mail não informado</span>'}</div>
@@ -1313,6 +1314,7 @@ const firestoreDb = getFirestore(fbApp);
     </div>
     <div class="client-actions">
       <button class="btn-ghost ver-avaliacoes-btn">${temNova ? '⭐ ' : ''}Avaliações (${avaliacoes.length})</button>
+      <button class="btn-ghost ver-historico-btn">Histórico (${historicoCliente.length})</button>
     </div>
     <div class="client-actions">
       <button class="btn-ghost edit-client-btn">Editar cliente</button>
@@ -1321,6 +1323,7 @@ const firestoreDb = getFirestore(fbApp);
     container.innerHTML = html;
 
     container.querySelector('.ver-avaliacoes-btn').addEventListener('click', ()=> openAvaliacoesCliente(c, avaliacoes));
+    container.querySelector('.ver-historico-btn').addEventListener('click', ()=> openHistoricoCliente(c, historicoCliente));
     container.querySelector('.add-dog-btn').addEventListener('click', ()=> openNovoCao(clientId, c.nome));
     container.querySelector('.edit-client-btn').addEventListener('click', ()=> openEditCliente(c));
     container.querySelector('.del-client-btn').addEventListener('click', async ()=>{
@@ -1388,6 +1391,61 @@ const firestoreDb = getFirestore(fbApp);
           createdAt: Date.now()
         });
         openNovoCao(id, nome, true);
+      });
+    });
+  }
+
+  async function openHistoricoCliente(c, walks){
+    const allDogs = await Dogs.all();
+    const dogMap = Object.fromEntries(allDogs.map(d=>[d.id,d]));
+    const ordenados = walks.slice().sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+
+    function itemHtml(w){
+      const dg = dogMap[w.dogId];
+      if(w.status === 'cancelado'){
+        return `<div class="client-info" style="margin-bottom:10px;">
+          <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+          <div class="info-row">🚫 Passeio cancelado</div>
+        </div>`;
+      }
+      const rep = w.report || {};
+      return `<div class="client-info" style="margin-bottom:10px;">
+        <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+        <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
+        <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
+        ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
+        ${rep.observacoes ? `<div class="info-row">📝 ${esc(rep.observacoes)}</div>` : ''}
+      </div>`;
+    }
+
+    let html = `<h2>Histórico de ${esc(c.nome)}</h2>`;
+    if(ordenados.length === 0){
+      html += `<p class="hint">Nenhum passeio no histórico ainda.</p>`;
+    } else {
+      html += itemHtml(ordenados[0]);
+      const rest = ordenados.slice(1);
+      const byMonth = {};
+      rest.forEach(w=>{
+        const key = w.date.slice(0,7);
+        (byMonth[key] = byMonth[key] || []).push(w);
+      });
+      Object.keys(byMonth).sort((a,b)=> b.localeCompare(a)).forEach(key=>{
+        html += `<div class="month-group">
+          <button class="month-toggle" data-month="${key}">${monthLabel(key)} (${byMonth[key].length}) <span class="chev">▾</span></button>
+          <div class="month-items" hidden>
+            ${byMonth[key].map(w=> itemHtml(w)).join('')}
+          </div>
+        </div>`;
+      });
+    }
+    openSheet(html, (el)=>{
+      el.querySelectorAll('.month-toggle').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const items = btn.nextElementSibling;
+          const isHidden = items.hasAttribute('hidden');
+          if(isHidden){ items.removeAttribute('hidden'); btn.classList.add('open'); }
+          else{ items.setAttribute('hidden',''); btn.classList.remove('open'); }
+        });
       });
     });
   }
