@@ -50,6 +50,15 @@
     flex-direction:column;
     position:relative;
   }
+  @media (min-width: 720px){
+    #app, #client-app{
+      max-width:640px;
+      height:auto;
+      min-height:100dvh;
+      box-shadow:0 0 40px rgba(34,40,31,0.08);
+    }
+    body{ background:var(--surface-alt); }
+  }
   .topbar{
     padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 14px 20px;
     background:var(--bg);
@@ -193,7 +202,7 @@
   /* Month grid (client "deste mês") */
   .month-walks-grid{
     display:grid;
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
     gap:10px;
   }
   .walk-card-compact{
@@ -660,6 +669,12 @@ const firestoreDb = getFirestore(fbApp);
     put: async (data)=>{ const {id, ...rest} = data; await updateDoc(docRef('planos', id), rest); },
     all: async ()=>{ const snap = await getDocs(colRef('planos')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
     del: (id)=> deleteDoc(docRef('planos', id)),
+  };
+  const Avulsos = {
+    add: async (data)=> (await addDoc(colRef('avulsos'), data)).id,
+    put: async (data)=>{ const {id, ...rest} = data; await updateDoc(docRef('avulsos', id), rest); },
+    all: async ()=>{ const snap = await getDocs(colRef('avulsos')); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
+    del: (id)=> deleteDoc(docRef('avulsos', id)),
   };
   const Config = {
     get: async ()=>{
@@ -1684,39 +1699,64 @@ const firestoreDb = getFirestore(fbApp);
 
   /* ================= PLANOS ================= */
   async function renderPlanos(){
-    const planos = await Planos.all();
+    const [planos, avulsos] = await Promise.all([Planos.all(), Avulsos.all()]);
+    let html = '';
     if(planos.length === 0){
-      views.planos.innerHTML = `
+      html += `
         <div class="empty-state">
           <span class="glyph">💳</span>
           <p>Nenhum plano cadastrado ainda.<br>Toque em <strong>+</strong> pra adicionar um plano (com os links de assinatura criados na InfinitePay).</p>
         </div>`;
-      return;
+    } else {
+      planos.forEach(p=>{
+        const variantes = p.variantes && p.variantes.length ? p.variantes : (p.preco ? [{duracao:'', preco:p.preco, link:p.link}] : []);
+        html += `<div class="client-card" data-id="${p.id}">
+          <div class="client-head" style="cursor:default;">
+            <div>
+              <div class="client-name">${esc(p.nome)}</div>
+              <div class="client-sub">${esc(p.frequencia)}</div>
+            </div>
+            <span class="dog-badge">${p.ativo === false ? 'Inativo' : 'Ativo'}</span>
+          </div>
+          <div class="client-dogs" style="padding:0 16px 16px 16px;">
+            ${p.descricao ? `<div class="info-row">${esc(p.descricao)}</div>` : ''}
+            ${variantes.map(v=>`<div class="info-row">⏱️ ${v.duracao ? esc(v.duracao)+' — ' : ''}${esc(v.preco)}</div>`).join('')}
+            <div class="client-actions">
+              <button class="btn-ghost edit-plano-btn">Editar</button>
+              <button class="btn-ghost danger del-plano-btn">Excluir</button>
+            </div>
+          </div>
+        </div>`;
+      });
     }
-    let html = '';
-    planos.forEach(p=>{
-      const variantes = p.variantes && p.variantes.length ? p.variantes : (p.preco ? [{duracao:'', preco:p.preco, link:p.link}] : []);
-      html += `<div class="client-card" data-id="${p.id}">
-        <div class="client-head" style="cursor:default;">
-          <div>
-            <div class="client-name">${esc(p.nome)}</div>
-            <div class="client-sub">${esc(p.frequencia)}</div>
+
+    html += `<div class="day-head" style="margin-top:26px;"><span class="label">Passeios avulsos</span><span class="rule"></span></div>`;
+    if(avulsos.length === 0){
+      html += `<p class="hint">Nenhum avulso cadastrado ainda.</p>`;
+    } else {
+      avulsos.forEach(a=>{
+        html += `<div class="client-card" data-avulso-id="${a.id}">
+          <div class="client-head" style="cursor:default;">
+            <div>
+              <div class="client-name">${esc(a.duracao)}</div>
+              <div class="client-sub">${esc(a.preco)}</div>
+            </div>
+            <span class="dog-badge">${a.ativo === false ? 'Inativo' : 'Ativo'}</span>
           </div>
-          <span class="dog-badge">${p.ativo === false ? 'Inativo' : 'Ativo'}</span>
-        </div>
-        <div class="client-dogs" style="padding:0 16px 16px 16px;">
-          ${p.descricao ? `<div class="info-row">${esc(p.descricao)}</div>` : ''}
-          ${variantes.map(v=>`<div class="info-row">⏱️ ${v.duracao ? esc(v.duracao)+' — ' : ''}${esc(v.preco)}</div>`).join('')}
-          <div class="client-actions">
-            <button class="btn-ghost edit-plano-btn">Editar</button>
-            <button class="btn-ghost danger del-plano-btn">Excluir</button>
+          <div class="client-dogs" style="padding:0 16px 16px 16px;">
+            <div class="client-actions">
+              <button class="btn-ghost edit-avulso-btn">Editar</button>
+              <button class="btn-ghost danger del-avulso-btn">Excluir</button>
+            </div>
           </div>
-        </div>
-      </div>`;
-    });
+        </div>`;
+      });
+    }
+    html += `<button class="btn-secondary" id="add-avulso-btn" style="margin-top:10px;">+ Adicionar avulso</button>`;
+
     views.planos.innerHTML = html;
 
-    views.planos.querySelectorAll('.client-card').forEach(card=>{
+    views.planos.querySelectorAll('.client-card[data-id]').forEach(card=>{
       const id = card.dataset.id;
       const p = planos.find(x=>x.id===id);
       card.querySelector('.edit-plano-btn').addEventListener('click', ()=> openEditPlano(p));
@@ -1725,6 +1765,73 @@ const firestoreDb = getFirestore(fbApp);
           await Planos.del(p.id);
           renderPlanos();
         }
+      });
+    });
+    views.planos.querySelectorAll('.client-card[data-avulso-id]').forEach(card=>{
+      const id = card.dataset.avulsoId;
+      const a = avulsos.find(x=>x.id===id);
+      card.querySelector('.edit-avulso-btn').addEventListener('click', ()=> openEditAvulso(a));
+      card.querySelector('.del-avulso-btn').addEventListener('click', async ()=>{
+        if(confirm(`Excluir o avulso "${a.duracao}"?`)){
+          await Avulsos.del(a.id);
+          renderPlanos();
+        }
+      });
+    });
+    document.getElementById('add-avulso-btn').addEventListener('click', openNovoAvulso);
+  }
+
+  function openNovoAvulso(){
+    openSheet(`
+      <h2>Novo passeio avulso</h2>
+      <label>Duração</label>
+      <input type="text" id="f-aduracao" placeholder="Ex: 30 minutos">
+      <label>Preço</label>
+      <input type="text" id="f-apreco" placeholder="Ex: R$40">
+      <label>Link de pagamento (InfinitePay)</label>
+      <input type="text" id="f-alink" placeholder="https://...">
+      <div class="field-error" id="f-error">Informe duração, preço e o link.</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-avulso">Salvar avulso</button>
+      </div>
+    `, (el)=>{
+      el.querySelector('#save-avulso').addEventListener('click', async ()=>{
+        const duracao = el.querySelector('#f-aduracao').value.trim();
+        const preco = el.querySelector('#f-apreco').value.trim();
+        const link = el.querySelector('#f-alink').value.trim();
+        if(!duracao || !preco || !link){ el.querySelector('#f-error').classList.add('show'); return; }
+        await Avulsos.add({ duracao, preco, link, ativo: true, createdAt: Date.now() });
+        closeSheet();
+        renderPlanos();
+      });
+    });
+  }
+
+  function openEditAvulso(a){
+    openSheet(`
+      <h2>Editar passeio avulso</h2>
+      <label>Duração</label>
+      <input type="text" id="f-aduracao" value="${esc(a.duracao)}">
+      <label>Preço</label>
+      <input type="text" id="f-apreco" value="${esc(a.preco)}">
+      <label>Link de pagamento (InfinitePay)</label>
+      <input type="text" id="f-alink" value="${esc(a.link)}">
+      <label class="checkbox-row" style="margin-top:10px;"><input type="checkbox" id="f-aativo" ${a.ativo === false ? '' : 'checked'}> Ativo (visível pro cliente)</label>
+      <div class="field-error" id="f-error">Informe duração, preço e o link.</div>
+      <div class="sheet-actions">
+        <button class="btn-primary" id="save-avulso">Salvar alterações</button>
+      </div>
+    `, (el)=>{
+      el.querySelector('#save-avulso').addEventListener('click', async ()=>{
+        const duracao = el.querySelector('#f-aduracao').value.trim();
+        const preco = el.querySelector('#f-apreco').value.trim();
+        const link = el.querySelector('#f-alink').value.trim();
+        if(!duracao || !preco || !link){ el.querySelector('#f-error').classList.add('show'); return; }
+        a.duracao = duracao; a.preco = preco; a.link = link;
+        a.ativo = el.querySelector('#f-aativo').checked;
+        await Avulsos.put(a);
+        closeSheet();
+        renderPlanos();
       });
     });
   }
@@ -1857,15 +1964,17 @@ const firestoreDb = getFirestore(fbApp);
       const clientDoc = snap.docs[0];
       const client = { id: clientDoc.id, ...clientDoc.data() };
 
-      const [dogsSnap, walksSnap, planosSnap, config] = await Promise.all([
+      const [dogsSnap, walksSnap, planosSnap, avulsosSnap, config] = await Promise.all([
         getDocs(query(colRef('dogs'), where('clientId','==', client.id))),
         getDocs(query(colRef('walks'), where('clientId','==', client.id))),
         getDocs(colRef('planos')),
+        getDocs(colRef('avulsos')),
         Config.get().catch(()=> ({}))
       ]);
       const dogs = dogsSnap.docs.map(d=>({id:d.id, ...d.data()}));
       const walks = walksSnap.docs.map(d=>({id:d.id, ...d.data()}));
       const planos = planosSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(p=> p.ativo !== false);
+      const avulsos = avulsosSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(a=> a.ativo !== false);
       const dogMap = Object.fromEntries(dogs.map(d=>[d.id,d]));
 
       const today = todayStr();
@@ -1992,6 +2101,18 @@ const firestoreDb = getFirestore(fbApp);
         });
       }
       htmlP += `</div>`;
+
+      if(avulsos.length > 0){
+        htmlP += `<h2 style="margin-top:26px;margin-bottom:10px;">Passeios avulsos</h2>`;
+        htmlP += `<p class="hint">Depois de pagar, combine a data e o horário direto com o passeador</p>`;
+        avulsos.forEach(a=>{
+          htmlP += `<div class="client-info" style="margin-bottom:12px;">
+            <div class="info-row"><strong>${esc(a.duracao)}</strong> — ${esc(a.preco)}</div>
+            <a class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:6px;" href="${esc(a.link)}" target="_blank" rel="noopener">Pagar e agendar</a>
+          </div>`;
+        });
+      }
+
       viewPasseios.innerHTML = htmlP;
 
       const renovarBtn = document.getElementById('renovar-btn');
