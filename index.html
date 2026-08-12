@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg:#EDEAE2;
@@ -551,6 +552,8 @@
       <button class="btn-primary" id="auth-submit">Entrar</button>
       <button class="btn-ghost" id="auth-toggle" style="width:100%;">Ainda não tenho conta</button>
     </div>
+    <div class="hint" style="text-align:center;margin:14px 0 6px 0;">ou</div>
+    <button class="btn-secondary" id="auth-google-btn" style="width:100%;">Entrar com Google</button>
   </div>
 </div>
 
@@ -619,7 +622,7 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -801,6 +804,62 @@ const firestoreDb = getFirestore(fbApp);
       placesLibPromise = loadGoogleMaps().then(()=> google.maps.importLibrary('places'));
     }
     return placesLibPromise;
+  }
+
+  /* ---------- Google Agenda ---------- */
+  const GOOGLE_CALENDAR_CLIENT_ID = '119520718621-0d52sbv4lebl0vcjvg6gjtk4j1b7rg0r.apps.googleusercontent.com';
+  let googleTokenClient = null;
+  let googleAccessToken = null;
+  let googleTokenExpiresAt = 0;
+  function getGoogleAccessToken(){
+    return new Promise((resolve, reject)=>{
+      if(googleAccessToken && Date.now() < googleTokenExpiresAt){ resolve(googleAccessToken); return; }
+      if(!window.google || !window.google.accounts){ reject(new Error('Google Identity Services não carregou ainda. Tente de novo em alguns segundos.')); return; }
+      if(!googleTokenClient){
+        googleTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CALENDAR_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/calendar.events',
+          callback: (resp)=>{
+            if(resp.error){ reject(new Error(resp.error)); return; }
+            googleAccessToken = resp.access_token;
+            googleTokenExpiresAt = Date.now() + (Number(resp.expires_in || 3500) * 1000);
+            resolve(googleAccessToken);
+          },
+        });
+      } else {
+        googleTokenClient.callback = (resp)=>{
+          if(resp.error){ reject(new Error(resp.error)); return; }
+          googleAccessToken = resp.access_token;
+          googleTokenExpiresAt = Date.now() + (Number(resp.expires_in || 3500) * 1000);
+          resolve(googleAccessToken);
+        };
+      }
+      googleTokenClient.requestAccessToken();
+    });
+  }
+  async function criarEventoGoogleAgenda(w, dg, c){
+    const token = await getGoogleAccessToken();
+    const startDateTime = `${w.date}T${w.time}:00`;
+    const [hh, mm] = w.time.split(':').map(Number);
+    const endMinutes = hh*60 + mm + 60;
+    const endTime = `${String(Math.floor(endMinutes/60)%24).padStart(2,'0')}:${String(endMinutes%60).padStart(2,'0')}`;
+    const endDateTime = `${w.date}T${endTime}:00`;
+    const event = {
+      summary: `Passeio — ${dg ? dg.nome : 'cão'}`,
+      description: `Cliente: ${c ? c.nome : ''}${c && c.endereco ? '\nEndereço: '+c.endereco : ''}`,
+      start: { dateTime: startDateTime, timeZone: 'America/Sao_Paulo' },
+      end: { dateTime: endDateTime, timeZone: 'America/Sao_Paulo' },
+    };
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(event),
+    });
+    if(!res.ok){
+      const errBody = await res.text();
+      throw new Error(`Falha ao criar evento (${res.status}): ${errBody}`);
+    }
+    return res.json();
   }
 
   /* ---------- GPS ao vivo durante o passeio ---------- */
@@ -1238,6 +1297,7 @@ const firestoreDb = getFirestore(fbApp);
         ${reportHtml}
         <div class="sheet-actions" style="flex-direction:column;">
           ${w.status === 'agendado' ? '<button class="btn-secondary" id="iniciar-btn">📍 Iniciar passeio (ativar GPS)</button>' : ''}
+          <button class="btn-secondary" id="add-gcal-btn">📅 Adicionar ao Google Agenda</button>
           ${w.status !== 'concluido' ? '<button class="btn-primary" id="mark-done">Finalizar passeio</button>' : '<button class="btn-secondary" id="edit-report">Editar registro</button>'}
           ${w.status !== 'cancelado' ? '<button class="btn-secondary" id="cancel-walk">Cancelar passeio</button>' : ''}
           <button class="btn-ghost danger" id="del-walk">Excluir passeio</button>
@@ -1251,6 +1311,20 @@ const firestoreDb = getFirestore(fbApp);
             }
           }).catch(()=>{});
         }
+        const gcalBtn = el.querySelector('#add-gcal-btn');
+        gcalBtn.addEventListener('click', async ()=>{
+          gcalBtn.disabled = true;
+          gcalBtn.textContent = 'Conectando...';
+          try{
+            await criarEventoGoogleAgenda(w, dg, c);
+            gcalBtn.textContent = '✅ Adicionado à Agenda';
+          }catch(err){
+            console.error('Erro ao criar evento no Google Agenda:', err);
+            alert('Não foi possível adicionar ao Google Agenda. Veja o console pra detalhes.');
+            gcalBtn.disabled = false;
+            gcalBtn.textContent = '📅 Adicionar ao Google Agenda';
+          }
+        });
         const iniciarBtn = el.querySelector('#iniciar-btn');
         if(iniciarBtn) iniciarBtn.addEventListener('click', async ()=>{
           iniciarBtn.disabled = true;
@@ -2215,6 +2289,17 @@ const firestoreDb = getFirestore(fbApp);
     authSubmit.textContent = isSignup ? 'Criar conta' : 'Entrar';
     authToggle.textContent = isSignup ? 'Já tenho conta' : 'Ainda não tenho conta';
     authError.classList.remove('show');
+  });
+
+  document.getElementById('auth-google-btn').addEventListener('click', async ()=>{
+    authError.classList.remove('show');
+    try{
+      await signInWithPopup(fbAuth, new GoogleAuthProvider());
+    }catch(err){
+      console.error('Erro no login com Google:', err);
+      authError.textContent = 'Não foi possível entrar com Google. Tente de novo.';
+      authError.classList.add('show');
+    }
   });
 
   authSubmit.addEventListener('click', async ()=>{
