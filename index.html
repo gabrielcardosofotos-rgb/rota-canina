@@ -19,15 +19,14 @@
     --surface-alt:#F7F5EF;
     --ink:#22281F;
     --ink-soft:#5B6358;
-    --pine:#D9603F;
-    --pine-dark:#2A2420;
-    --pine-press:#B84A2E;
-    --ochre:#E8825F;
-    --ochre-soft:#FBE0D3;
+    --pine:#2F4B3C;
+    --pine-dark:#1E3226;
+    --ochre:#B8863B;
+    --ochre-soft:#EADFC7;
     --line:#DAD5C8;
     --line-strong:#C7C0AE;
     --danger:#A24B3E;
-    --radius:16px;
+    --radius:20px;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;}
@@ -172,7 +171,7 @@
     background:var(--ink-soft);
     flex-shrink:0;
   }
-  .status-pill.concluido{background:var(--ochre-soft);color:#9C3F26;}
+  .status-pill.concluido{background:var(--ochre-soft);color:#7A5A22;}
   .status-pill.concluido::before{background:var(--ochre);}
 
   /* Clients */
@@ -192,6 +191,26 @@
     font-family:'Fraunces',serif;font-weight:600;font-size:16px;
     flex-shrink:0;
   }
+
+  /* Hero header inside sheets (walk detail) */
+  .sheet-hero{
+    background:var(--pine);
+    color:#fff;
+    margin:6px -20px 18px -20px;
+    padding:26px 20px 22px 20px;
+    border-radius:22px;
+    text-align:center;
+  }
+  .sheet-hero-avatar{
+    width:52px;height:52px;border-radius:50%;
+    background:rgba(255,255,255,0.16);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-weight:600;font-size:20px;
+    margin:0 auto 10px auto;
+  }
+  .sheet-hero-time{font-family:'Fraunces',serif;font-style:italic;font-size:30px;font-weight:600;line-height:1.1;}
+  .sheet-hero-title{font-size:17px;font-weight:700;margin-top:4px;}
+  .sheet-hero-sub{font-size:13px;opacity:.85;margin-top:2px;}
   .client-head{
     display:flex;
     justify-content:space-between;
@@ -323,22 +342,28 @@
     background:var(--pine);
     color:#fff;
     border:none;
-    border-radius:14px;
-    padding:14px;
+    border-radius:99px;
+    padding:15px 18px;
     font-size:15px;
-    font-weight:600;
+    font-weight:700;
     cursor:pointer;
-    box-shadow:0 2px 8px rgba(217,96,63,0.28);
+    box-shadow:0 4px 14px rgba(47,75,60,0.3);
     transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
   }
-  .btn-primary:active{background:var(--pine-press);transform:scale(0.97);box-shadow:0 1px 4px rgba(217,96,63,0.22);}
+  .btn-primary:active{background:var(--pine-dark);transform:scale(0.97);box-shadow:0 1px 4px rgba(47,75,60,0.22);}
+  .btn-primary::after{content:'→';font-weight:700;}
+  .btn-primary.no-arrow::after{content:'';}
   .btn-secondary{
     flex:1;
     background:var(--surface-alt);
     color:var(--ink);
     border:none;
-    border-radius:14px;
-    padding:14px;
+    border-radius:99px;
+    padding:14px 18px;
     font-size:15px;
     font-weight:600;
     cursor:pointer;
@@ -1332,8 +1357,12 @@ const firestoreDb = getFirestore(fbApp);
       ` : '';
 
       openSheet(`
-        <h2>${dayLabel(w.date)} às ${w.time}</h2>
-        <p class="hint">${esc(dg ? dg.nome : 'Cão removido')} · ${esc(c ? c.nome : 'Cliente removido')}</p>
+        <div class="sheet-hero">
+          <div class="sheet-hero-avatar">${esc(dg ? dg.nome : '?').trim().charAt(0).toUpperCase() || '🐾'}</div>
+          <div class="sheet-hero-time">${w.time}</div>
+          <div class="sheet-hero-title">${esc(dg ? dg.nome : 'Cão removido')}</div>
+          <div class="sheet-hero-sub">${esc(c ? c.nome : 'Cliente removido')} · ${dayLabel(w.date)}</div>
+        </div>
         <div class="client-info">
           <div class="info-row">📍 ${c && c.endereco ? `<a class="addr-link" href="${addressLink(c)}" target="_blank" rel="noopener">${esc(c.endereco)}</a>` : '<span class="hint">Endereço não informado</span>'}</div>
           ${c && c.telefone ? `<div class="info-row">💬 <a class="addr-link" href="${whatsappLink(c.telefone)}" target="_blank" rel="noopener">${esc(c.telefone)}</a></div>` : ''}
