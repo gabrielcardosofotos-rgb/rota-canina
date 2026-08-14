@@ -30,6 +30,8 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;}
+  *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+  button, a, input, select, textarea{-webkit-tap-highlight-color:transparent;}
   body{
     background:var(--bg);
     color:var(--ink);
@@ -155,11 +157,11 @@
   .walk-client{font-size:14px;color:var(--ink-soft);margin-top:1px;}
   .status-pill{
     font-size:12px;
-    font-weight:600;
-    padding:4px 11px;
+    font-weight:700;
+    padding:5px 12px;
     border-radius:99px;
-    background:var(--surface-alt);
-    color:var(--ink-soft);
+    background:var(--ochre-soft);
+    color:#7A5A22;
     white-space:nowrap;
     display:inline-flex;
     align-items:center;
@@ -168,11 +170,15 @@
   .status-pill::before{
     content:'';
     width:6px;height:6px;border-radius:50%;
-    background:var(--ink-soft);
+    background:#B8863B;
     flex-shrink:0;
   }
-  .status-pill.concluido{background:var(--ochre-soft);color:#7A5A22;}
-  .status-pill.concluido::before{background:var(--ochre);}
+  .status-pill.concluido{background:#DCE6DE;color:#2F4B3C;}
+  .status-pill.concluido::before{background:#2F4B3C;}
+  .status-pill.cancelado{background:#F3D9D5;color:#8A3B2E;}
+  .status-pill.cancelado::before{background:#A24B3E;}
+  .status-pill.andamento{background:var(--pine);color:#fff;}
+  .status-pill.andamento::before{background:#fff;}
 
   /* Clients */
   .client-card{
@@ -381,6 +387,22 @@
     cursor:pointer;
   }
   .btn-ghost.danger{color:var(--danger);border-color:#E3C7C1;}
+  .btn-soft{
+    width:100%;
+    background:var(--ochre-soft);
+    color:#7A5A22;
+    border:none;
+    border-radius:99px;
+    padding:15px 18px;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:transform .12s ease;
+  }
+  .btn-soft:active{transform:scale(0.97);}
 
   /* Bottom nav + FAB */
   .bottomnav{
@@ -1184,7 +1206,7 @@ const firestoreDb = getFirestore(fbApp);
         const dog = dogMap[w.dogId];
         const client = clientMap[w.clientId];
         const statusClass = w.status === 'concluido' ? 'status-concluido' : (w.status === 'cancelado' ? 'status-cancelado' : '');
-        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : w.status === 'em_andamento' ? '<span class="status-pill concluido">📍 Em andamento</span>' : '<span class="status-pill">Agendado</span>';
+        const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : w.status === 'em_andamento' ? '<span class="status-pill andamento">📍 Em andamento</span>' : '<span class="status-pill">Agendado</span>';
         html += `<li class="walk-card ${statusClass}" data-id="${w.id}">
           <div class="walk-top">
             <div>
@@ -1695,7 +1717,7 @@ const firestoreDb = getFirestore(fbApp);
       if(w.status === 'cancelado'){
         return `<div class="client-info" style="margin-bottom:10px;">
           <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
-          <div class="info-row">🚫 Passeio cancelado</div>
+          <div class="info-row"><span class="status-pill cancelado">🚫 Cancelado</span></div>
         </div>`;
       }
       const rep = w.report || {};
@@ -2176,7 +2198,7 @@ const firestoreDb = getFirestore(fbApp);
         if(w.status === 'cancelado'){
           return `<div class="client-info" style="margin-bottom:12px;">
             <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
-            <div class="info-row">🚫 Passeio cancelado</div>
+            <div class="info-row"><span class="status-pill cancelado">🚫 Cancelado</span></div>
           </div>`;
         }
         const rep = w.report || {};
@@ -2231,7 +2253,7 @@ const firestoreDb = getFirestore(fbApp);
 
       htmlP += `<div id="planos-section">`;
       if(config.mostrarWhatsapp && config.whatsapp){
-        htmlP += `<a class="btn-primary" style="display:block;text-decoration:none;margin:20px 0;" href="${whatsappLink(config.whatsapp)}" target="_blank" rel="noopener">WhatsApp Passeador</a>`;
+        htmlP += `<a class="btn-soft" style="display:flex;text-decoration:none;margin:20px 0;" href="${whatsappLink(config.whatsapp)}" target="_blank" rel="noopener">💬 WhatsApp Passeador</a>`;
       }
       htmlP += `<h2 style="margin-top:6px;margin-bottom:10px;">Planos disponíveis</h2>`;
       if(planos.length === 0){
