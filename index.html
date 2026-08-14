@@ -122,8 +122,7 @@
   .walks-list{
     list-style:none;
     margin:0;
-    padding-left:20px;
-    border-left:2px dashed var(--line-strong);
+    padding:0;
     display:flex;
     flex-direction:column;
     gap:10px;
@@ -132,29 +131,28 @@
     position:relative;
     background:var(--surface);
     border-radius:var(--radius);
-    padding:14px 16px;
+    padding:16px 18px;
     box-shadow:0 2px 10px rgba(34,40,31,0.07), 0 1px 2px rgba(34,40,31,0.05);
     transition:transform .15s ease, box-shadow .15s ease;
   }
   .walk-card:active{transform:scale(0.98);}
-  .walk-card::before{
-    content:'';
-    position:absolute;
-    left:-26px;
-    top:20px;
-    width:10px;
-    height:10px;
-    border-radius:50%;
+  .walk-card.status-cancelado{opacity:.55;}
+  .walk-row{display:flex;align-items:center;gap:14px;}
+  .walk-avatar{
+    width:48px;height:48px;border-radius:50%;
     background:var(--pine);
-    border:3px solid var(--bg);
+    color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-weight:600;font-size:19px;
+    flex-shrink:0;
   }
-  .walk-card.status-concluido::before{background:var(--ochre);}
-  .walk-card.status-cancelado{opacity:.5;}
-  .walk-card.status-cancelado::before{background:var(--line-strong);}
+  .walk-card.status-concluido .walk-avatar{background:var(--ochre);}
+  .walk-card.status-cancelado .walk-avatar{background:var(--line-strong);}
+  .walk-info{flex:1;min-width:0;}
   .walk-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .walk-time{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:var(--pine-dark);}
-  .walk-dog{font-size:16px;font-weight:600;margin-top:2px;}
-  .walk-client{font-size:14px;color:var(--ink-soft);margin-top:1px;}
+  .walk-time{font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:var(--pine-dark);}
+  .walk-dog{font-size:16px;font-weight:700;margin-top:1px;}
+  .walk-client{font-size:13px;color:var(--ink-soft);margin-top:1px;}
   .status-pill{
     font-size:12px;
     font-weight:700;
@@ -240,6 +238,13 @@
   }
   .client-dogs[hidden]{display:none;}
   .client-info{padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:4px;}
+  .history-card{
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin-bottom:10px;
+    box-shadow:0 2px 10px rgba(34,40,31,0.07), 0 1px 2px rgba(34,40,31,0.05);
+  }
 
   /* Renewal banner */
   .renew-banner{
@@ -264,9 +269,10 @@
     gap:10px;
   }
   .walk-card-compact{
-    padding:12px 14px;
+    padding:14px 14px;
+    text-align:center;
   }
-  .walk-card-compact::before{content:none;}
+  .walk-avatar-sm{width:34px;height:34px;font-size:14px;margin:0 auto 8px auto;}
   .walk-card-compact .walk-time{font-size:16px;}
   .walk-card-compact .walk-dog{font-size:14px;}
   .walk-card-compact .walk-client{font-size:12px;}
@@ -1208,8 +1214,9 @@ const firestoreDb = getFirestore(fbApp);
         const statusClass = w.status === 'concluido' ? 'status-concluido' : (w.status === 'cancelado' ? 'status-cancelado' : '');
         const pill = w.status === 'concluido' ? `<span class="status-pill concluido">Concluído${w.hasPhoto ? ' 📷' : ''}</span>` : w.status === 'em_andamento' ? '<span class="status-pill andamento">📍 Em andamento</span>' : '<span class="status-pill">Agendado</span>';
         html += `<li class="walk-card ${statusClass}" data-id="${w.id}">
-          <div class="walk-top">
-            <div>
+          <div class="walk-row">
+            <div class="walk-avatar">${esc(dog ? dog.nome : '🐾').trim().charAt(0).toUpperCase() || '🐾'}</div>
+            <div class="walk-info">
               <div class="walk-time">${timeLabel(w.time)}</div>
               <div class="walk-dog">${esc(dog ? dog.nome : 'Cão removido')}</div>
               <div class="walk-client">${esc(client ? client.nome : 'Cliente removido')}</div>
@@ -1714,21 +1721,35 @@ const firestoreDb = getFirestore(fbApp);
 
     function itemHtml(w){
       const dg = dogMap[w.dogId];
+      const initial = esc(dg ? dg.nome : '🐾').trim().charAt(0).toUpperCase() || '🐾';
       if(w.status === 'cancelado'){
-        return `<div class="client-info" style="margin-bottom:10px;">
-          <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
-          <div class="info-row"><span class="status-pill cancelado">🚫 Cancelado</span></div>
+        return `<div class="history-card">
+          <div class="walk-row" style="margin-bottom:0;">
+            <div class="walk-avatar" style="background:var(--line-strong);">${initial}</div>
+            <div class="walk-info">
+              <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+              <div class="walk-client">${dayLabel(w.date)} às ${w.time}</div>
+            </div>
+            <span class="status-pill cancelado">🚫 Cancelado</span>
+          </div>
         </div>`;
       }
       const rep = w.report || {};
       const avaliacaoHtml = w.avaliacao ? `
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
           <div class="info-row" style="font-weight:600;">Avaliação do cliente</div>
           <div class="info-row" style="font-size:18px;letter-spacing:2px;color:var(--ochre);">${'★'.repeat(w.avaliacao.nota)}${'☆'.repeat(5 - w.avaliacao.nota)}</div>
           ${w.avaliacao.comentario ? `<div class="info-row">💬 ${esc(w.avaliacao.comentario)}</div>` : ''}
         </div>` : '';
-      return `<div class="client-info" style="margin-bottom:10px;">
-        <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+      return `<div class="history-card">
+        <div class="walk-row" style="margin-bottom:10px;">
+          <div class="walk-avatar" style="background:var(--ochre);">${initial}</div>
+          <div class="walk-info">
+            <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+            <div class="walk-client">${dayLabel(w.date)} às ${w.time}</div>
+          </div>
+          <span class="status-pill concluido">Concluído</span>
+        </div>
         <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
         <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
         ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
@@ -2195,15 +2216,29 @@ const firestoreDb = getFirestore(fbApp);
 
       function entryHtml(w){
         const dg = dogMap[w.dogId];
+        const initial = esc(dg ? dg.nome : '🐾').trim().charAt(0).toUpperCase() || '🐾';
         if(w.status === 'cancelado'){
-          return `<div class="client-info" style="margin-bottom:12px;">
-            <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
-            <div class="info-row"><span class="status-pill cancelado">🚫 Cancelado</span></div>
+          return `<div class="history-card">
+            <div class="walk-row" style="margin-bottom:0;">
+              <div class="walk-avatar" style="background:var(--line-strong);">${initial}</div>
+              <div class="walk-info">
+                <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+                <div class="walk-client">${dayLabel(w.date)} às ${w.time}</div>
+              </div>
+              <span class="status-pill cancelado">🚫 Cancelado</span>
+            </div>
           </div>`;
         }
         const rep = w.report || {};
-        return `<div class="client-info" style="margin-bottom:12px;">
-          <div class="info-row"><strong>${dayLabel(w.date)} às ${w.time}</strong> — ${esc(dg ? dg.nome : '')}</div>
+        return `<div class="history-card">
+          <div class="walk-row" style="margin-bottom:10px;">
+            <div class="walk-avatar" style="background:var(--ochre);">${initial}</div>
+            <div class="walk-info">
+              <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
+              <div class="walk-client">${dayLabel(w.date)} às ${w.time}</div>
+            </div>
+            <span class="status-pill concluido">Concluído</span>
+          </div>
           <div class="info-row">${rep.xixi ? '💧 Fez xixi' : '💧 Não fez xixi'}</div>
           <div class="info-row">${rep.coco ? '💩 Fez cocô' : '💩 Não fez cocô'}</div>
           ${rep.comportamento ? `<div class="info-row">🐾 ${esc(rep.comportamento)}</div>` : ''}
@@ -2243,6 +2278,7 @@ const firestoreDb = getFirestore(fbApp);
         doMes.forEach(w=>{
           const dg = dogMap[w.dogId];
           htmlP += `<div class="walk-card walk-card-compact">
+            <div class="walk-avatar walk-avatar-sm">${esc(dg ? dg.nome : '🐾').trim().charAt(0).toUpperCase() || '🐾'}</div>
             <div class="walk-time">${w.time}</div>
             <div class="walk-dog">${esc(dg ? dg.nome : '')}</div>
             <div class="walk-client">${dayLabel(w.date)}</div>
